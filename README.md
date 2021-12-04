@@ -1,10 +1,10 @@
 # ColorBox
 
-ColorBox is a low-level toolbox for working with color data.
+A low-level toolbox for working with color transforms.
 
 ColorBox does NOT provide any kind of framework for doing color
-management or maintaining color pipelines, it only provides the low-level
-building blocks for doing color transformations.  As such, most people
+management or maintaining color pipelines, it only provides tools for
+constructing and working with color transforms.  As such, most people
 probably won't want to use this crate directly.
 
 

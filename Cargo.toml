@@ -2,7 +2,13 @@
 name = "colorbox"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Nathan Vegdahl <cessen@cessen.com>"]
+description = "A low-level toolbox for working with color transforms"
+documentation = "https://docs.rs/colorbox"
+repository = "https://github.com/cessen/colorbox"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["color"]
+categories = ["graphics"]
 
 [dependencies]

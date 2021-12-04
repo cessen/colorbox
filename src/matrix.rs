@@ -261,7 +261,7 @@ pub fn multiply(a: Matrix, b: Matrix) -> Matrix {
 
 /// Transforms a color by a matrix.
 #[inline]
-pub fn transform_color(color: [f64; 3], m: Matrix) -> [f64; 3] {
+fn transform_color(color: [f64; 3], m: Matrix) -> [f64; 3] {
     let mut c = [0.0f64; 3];
 
     c[0] = (color[0] * m[0][0]) + (color[1] * m[0][1]) + (color[2] * m[0][2]);
