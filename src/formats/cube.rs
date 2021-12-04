@@ -1,4 +1,4 @@
-//! DaVinci Resolve's color transform LUT format.
+//! DaVinci Resolve's .cube LUT format.
 //!
 //! This format can accommodate both 1D and 3D LUTs.
 

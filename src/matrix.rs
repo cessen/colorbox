@@ -278,11 +278,94 @@ mod tests {
     use super::*;
 
     fn vec_max_diff(a: [f64; 3], b: [f64; 3]) -> f64 {
-        let x = (a[0] - b[0]).abs();
-        let y = (a[1] - b[1]).abs();
-        let z = (a[2] - b[2]).abs();
+        let mut max_diff: f64 = 0.0;
+        for (aa, bb) in a.iter().zip(b.iter()) {
+            let diff = (aa - bb).abs();
+            max_diff = max_diff.max(diff);
+        }
+        max_diff
+    }
 
-        x.max(y.max(z))
+    fn matrix_max_diff(a: Matrix, b: Matrix) -> f64 {
+        let mut max_diff: f64 = 0.0;
+        for (aa, bb) in a.iter().flatten().zip(b.iter().flatten()) {
+            let diff = (aa - bb).abs();
+            max_diff = max_diff.max(diff);
+        }
+        max_diff
+    }
+
+    #[test]
+    fn rgb_to_xyz_test() {
+        let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP0);
+
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.9525523959, 0.0000000000, 0.0000936786],
+                    [0.3439664498, 0.7281660966, -0.0721325464],
+                    [0.0000000000, 0.0000000000, 1.0088251844],
+                ]
+            ) < 0.000_000_001
+        );
+    }
+
+    #[test]
+    fn rgb_to_rgb_test() {
+        let mat = rgb_to_rgb_matrix(crate::chroma::REC709, crate::chroma::ACES_AP0);
+
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.4329305201, 0.3753843595, 0.1893780579],
+                    [0.0894131371, 0.8165330211, 0.1030219928],
+                    [0.0191617131, 0.1181520660, 0.9422169143],
+                ]
+            ) < 0.000_000_001
+        );
+    }
+
+    #[test]
+    fn chromatic_adaptation_test() {
+        let to_xyz = rgb_to_xyz_matrix(crate::chroma::REC709);
+        let adapt_xyz = xyz_chromatic_adaptation_matrix(
+            crate::chroma::REC709.w,
+            (1.0 / 3.0, 1.0 / 3.0),
+            AdaptationMethod::XYZScale,
+        );
+        let adapt_hunt = xyz_chromatic_adaptation_matrix(
+            crate::chroma::REC709.w,
+            (1.0 / 3.0, 1.0 / 3.0),
+            AdaptationMethod::Hunt,
+        );
+        let adapt_bradford = xyz_chromatic_adaptation_matrix(
+            crate::chroma::REC709.w,
+            (1.0 / 3.0, 1.0 / 3.0),
+            AdaptationMethod::Bradford,
+        );
+
+        let white_1 = transform_color([1.0, 1.0, 1.0], multiply(to_xyz, adapt_xyz));
+        let white_2 = transform_color([1.0, 1.0, 1.0], multiply(to_xyz, adapt_hunt));
+        let white_3 = transform_color([1.0, 1.0, 1.0], multiply(to_xyz, adapt_bradford));
+
+        assert!(vec_max_diff(white_1, [1.0, 1.0, 1.0]) < 0.000_000_001);
+        assert!(vec_max_diff(white_2, [1.0, 1.0, 1.0]) < 0.000_000_001);
+        assert!(vec_max_diff(white_3, [1.0, 1.0, 1.0]) < 0.000_000_001);
+    }
+
+    #[test]
+    fn matrix_invert_test() {
+        let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP0);
+        let inv = invert(mat).unwrap();
+
+        assert!(
+            matrix_max_diff(
+                multiply(mat, inv),
+                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0],]
+            ) < 0.000_000_001
+        );
     }
 
     #[test]

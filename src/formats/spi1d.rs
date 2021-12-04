@@ -1,4 +1,4 @@
-//! SPI's 1D color transform LUT format.
+//! SPI's 1D LUT format.
 
 use std::io::Write;
 
