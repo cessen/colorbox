@@ -1,5 +1,8 @@
 # ColorBox
 
+[![Latest Release][crates-io-badge]][crates-io-url]
+[![Documentation][docs-rs-img]][docs-rs-url]
+
 A low-level toolbox for working with color transforms.
 
 ColorBox does NOT provide any kind of framework for doing color
@@ -25,3 +28,10 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in ColorBox by you will be licensed as above,
 without any additional terms or conditions.
+
+
+
+[crates-io-badge]: https://img.shields.io/crates/v/colorbox.svg
+[crates-io-url]: https://crates.io/crates/colorbox
+[docs-rs-img]: https://docs.rs/colorbox/badge.svg
+[docs-rs-url]: https://docs.rs/colorbox
