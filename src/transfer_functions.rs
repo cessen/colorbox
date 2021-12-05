@@ -29,36 +29,50 @@ pub mod srgb {
         #[test]
         fn from_linear_test() {
             assert_eq!(from_linear(0.0), 0.0);
-            assert!((from_linear(1.0) - 1.0).abs() < 0.0000001);
+            assert!((from_linear(1.0) - 1.0).abs() < 0.000_001);
         }
 
         #[test]
         fn to_linear_test() {
             assert_eq!(to_linear(0.0), 0.0);
-            assert!((to_linear(1.0) - 1.0).abs() < 0.0000001);
+            assert!((to_linear(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_001);
+            }
         }
     }
 }
 
-/// Rec.709 gamma.
+/// Rec.709 and Rec.2020 gamma.
 pub mod rec709 {
+    // We use high-precision versions of the constants here
+    // so that it works for Rec.2020 as well.
+    const A: f32 = 1.09929682680944;
+    const B: f32 = 0.01805396851080;
+    const C: f32 = A - 1.0;
+
     /// Linear -> sRGB
     #[inline]
     pub fn from_linear(n: f32) -> f32 {
-        if n < 0.018 {
+        if n < B {
             n * 4.5
         } else {
-            (1.099 * n.powf(0.45)) - 0.099
+            (A * n.powf(0.45)) - C
         }
     }
 
     /// sRGB -> Linear
     #[inline]
     pub fn to_linear(n: f32) -> f32 {
-        if n < 0.081 {
+        if n < (B * 4.5) {
             n / 4.5
         } else {
-            ((n + 0.099) / 1.099).powf(1.0 / 0.45)
+            ((n + C) / A).powf(1.0 / 0.45)
         }
     }
 
@@ -69,13 +83,21 @@ pub mod rec709 {
         #[test]
         fn from_linear_test() {
             assert_eq!(from_linear(0.0), 0.0);
-            assert!((from_linear(1.0) - 1.0).abs() < 0.0000001);
+            assert!((from_linear(1.0) - 1.0).abs() < 0.000_001);
         }
 
         #[test]
         fn to_linear_test() {
             assert_eq!(to_linear(0.0), 0.0);
-            assert!((to_linear(1.0) - 1.0).abs() < 0.0000001);
+            assert!((to_linear(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_001);
+            }
         }
     }
 }
@@ -134,6 +156,32 @@ pub mod pq {
 
         ((n_1_m2 - C1).max(0.0) / (C2 - (C3 * n_1_m2))).powf(1.0 / M1)
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn from_linear_test() {
+            assert!((from_linear_norm(0.0) - 0.0).abs() < 0.000_001);
+            assert!((from_linear_norm(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            assert!((to_linear_norm(0.0) - 0.0).abs() < 0.000_001);
+            assert!((to_linear_norm(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                dbg!(n);
+                assert!((n - to_linear_norm(from_linear_norm(n))).abs() < 0.000_1);
+            }
+        }
+    }
 }
 
 /// Hybrid Log-Gamma from Rec.2100.
@@ -168,6 +216,32 @@ pub mod hlg {
             (n * n) / 3.0
         } else {
             (((n - c) / A).exp() + B) / 12.0
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn from_linear_test() {
+            assert!((from_linear(0.0) - 0.0).abs() < 0.000_001);
+            assert!((from_linear(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            assert!((to_linear(0.0) - 0.0).abs() < 0.000_001);
+            assert!((to_linear(1.0) - 1.0).abs() < 0.000_001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                dbg!(n);
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_001);
+            }
         }
     }
 }
@@ -309,6 +383,14 @@ pub mod sony_slog1 {
 
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+            }
         }
     }
 }
@@ -454,6 +536,14 @@ pub mod sony_slog2 {
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
         }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+            }
+        }
     }
 }
 
@@ -575,6 +665,14 @@ pub mod sony_slog3 {
 
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_05);
+            }
         }
     }
 }
@@ -699,6 +797,14 @@ pub mod canon_log1 {
 
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+            }
         }
     }
 }
@@ -827,6 +933,14 @@ pub mod canon_log2 {
 
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_1);
+            }
         }
     }
 }
@@ -963,6 +1077,14 @@ pub mod canon_log3 {
 
             assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
             assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+            }
         }
     }
 }
