@@ -14,7 +14,7 @@ pub struct Chromaticities {
     pub w: (f64, f64),
 }
 
-/// Chromaticities of the Rec.709 and sRGB color spaces.
+/// Rec.709/sRGB chromaticities.
 pub const REC709: Chromaticities = Chromaticities {
     r: (0.640, 0.330),
     g: (0.300, 0.600),
@@ -22,7 +22,7 @@ pub const REC709: Chromaticities = Chromaticities {
     w: (0.3127, 0.3290),
 };
 
-/// Chromaticities of the Rec.2020 color space.
+/// Rec.2020 chromaticities.
 pub const REC2020: Chromaticities = Chromaticities {
     r: (0.708, 0.292),
     g: (0.170, 0.797),
@@ -59,6 +59,9 @@ pub const ACES_AP1: Chromaticities = Chromaticities {
     w: (0.32168, 0.33767),
 };
 
+//-------------------------------------------------------------
+// Various vendor-specific color spaces.
+
 /// Adobe RGB chromaticities.
 pub const ADOBE_RGB: Chromaticities = Chromaticities {
     r: (0.6400, 0.3300),
@@ -81,4 +84,48 @@ pub const PROPHOTO: Chromaticities = Chromaticities {
     g: (0.159597, 0.840403),
     b: (0.036598, 0.000105),
     w: (0.345704, 0.358540),
+};
+
+/// Sony S-Gamut/S-Gamut3 chromaticities.
+///
+/// Yes, they are exactly the same, as per page 7 of "Technical
+/// Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3" from
+/// Sony.
+pub const S_GAMUT: Chromaticities = Chromaticities {
+    r: (0.73000, 0.28000),
+    g: (0.14000, 0.85500),
+    b: (0.10000, -0.05000),
+    w: (0.31270, 0.32900),
+};
+
+/// Sony S-Gamut3.Cine chromaticities.
+///
+/// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
+/// and S-Gamut3/S-Log3" from Sony.
+pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
+    r: (0.76600, 0.27500),
+    g: (0.22500, 0.80000),
+    b: (0.08900, -0.08700),
+    w: (0.31270, 0.32900),
+};
+
+/// ALEXA Wide Gamut RGB.
+///
+/// From page 10 of "ALEXA Log C Curve - Usage in VFX" by
+/// Harald Brendei, from Arri, 2017-03-09.
+pub const ALEXA_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
+    r: (0.6840, 0.3130),
+    g: (0.2210, 0.8480),
+    b: (0.0861, -0.1020),
+    w: (0.3127, 0.3290),
+};
+
+/// RED Wide Gamut RGB.
+///
+/// From page 1 of "White paper on REDWideGamutRGB and Log3G10" from RED.
+pub const RED_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
+    r: (0.780308, 0.304253),
+    g: (0.121595, 1.493994),
+    b: (0.095612, -0.084589),
+    w: (0.3127, 0.3290),
 };
