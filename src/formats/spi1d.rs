@@ -8,7 +8,7 @@ use std::io::{BufRead, Write};
 /// 3-component table file will be written depending on the number of
 /// tables passed.
 pub fn write<W: Write>(
-    out: &mut W,
+    mut writer: W,
     range_min: f32,
     range_max: f32,
     tables: &[&[f32]],
@@ -16,19 +16,19 @@ pub fn write<W: Write>(
     assert!(tables.len() > 0 && tables.len() <= 3);
     assert!(tables.iter().all(|t| t.len() == tables[0].len()));
 
-    out.write_all(b"Version 1\n")?;
-    out.write_all(format!("From {:0.7} {:0.7}\n", range_min, range_max).as_bytes())?;
-    out.write_all(format!("Length {}\n", tables[0].len()).as_bytes())?;
-    out.write_all(format!("Components {}\n", tables.len()).as_bytes())?;
-    out.write_all(b"{\n")?;
+    writer.write_all(b"Version 1\n")?;
+    writer.write_all(format!("From {:0.7} {:0.7}\n", range_min, range_max).as_bytes())?;
+    writer.write_all(format!("Length {}\n", tables[0].len()).as_bytes())?;
+    writer.write_all(format!("Components {}\n", tables.len()).as_bytes())?;
+    writer.write_all(b"{\n")?;
     for i in 0..tables[0].len() {
-        out.write_all(b" ")?;
+        writer.write_all(b" ")?;
         for t in tables.iter() {
-            out.write_all(format!(" {:0.7}", t[i]).as_bytes())?;
+            writer.write_all(format!(" {:0.7}", t[i]).as_bytes())?;
         }
-        out.write_all(b"\n")?;
+        writer.write_all(b"\n")?;
     }
-    out.write_all(b"}\n")?;
+    writer.write_all(b"}\n")?;
 
     Ok(())
 }
@@ -49,9 +49,7 @@ pub fn write<W: Write>(
 ///   component data.
 ///
 /// Returns (range_min, range_max, component_count, tables).
-pub fn read<R: BufRead>(
-    reader: &mut R,
-) -> Result<(f32, f32, usize, [Vec<f32>; 3]), super::ReadError> {
+pub fn read<R: BufRead>(reader: R) -> Result<(f32, f32, usize, [Vec<f32>; 3]), super::ReadError> {
     // let mut name: Option<String> = None;
     let mut range_min = 0.0;
     let mut range_max = 1.0;

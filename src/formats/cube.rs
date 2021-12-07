@@ -6,7 +6,7 @@
 use std::io::{BufRead, Write};
 
 pub fn write_1d<W: Write>(
-    writer: &mut W,
+    mut writer: W,
     range_min: [f32; 3],
     range_max: [f32; 3],
     tables: [&[f32]; 3],
@@ -45,7 +45,7 @@ pub fn write_1d<W: Write>(
 /// Reads a 1D .cube file.
 ///
 /// Returns (range_min, range_max, table) for each channel.
-pub fn read_1d<R: BufRead>(reader: &mut R) -> Result<[(f32, f32, Vec<f32>); 3], super::ReadError> {
+pub fn read_1d<R: BufRead>(reader: R) -> Result<[(f32, f32, Vec<f32>); 3], super::ReadError> {
     // let mut name: Option<String> = None;
     let mut range_min = [0.0f32; 3];
     let mut range_max = [1.0f32; 3];
