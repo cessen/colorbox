@@ -58,8 +58,12 @@ pub fn read_1d<R: BufRead>(reader: R) -> Result<[(f32, f32, Vec<f32>); 3], super
 
         if parts.is_empty() || parts[0].starts_with("#") {
             continue;
-        } else if parts[0] == "TITLE" && parts.len() == 2 {
-            // name = Some(parts[1].into());
+        } else if parts[0] == "TITLE" && parts.len() > 1 {
+            let name_parts: Vec<_> = line.trim().split("\"").collect();
+            if name_parts.len() != 3 || !name_parts[2].is_empty() {
+                return Err(super::ReadError::FormatErr);
+            }
+            // name = Some(name_parts[1].into());
             continue;
         } else if parts[0] == "DOMAIN_MIN" && parts.len() == 4 {
             range_min = [
