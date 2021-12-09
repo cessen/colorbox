@@ -5,6 +5,8 @@
 
 use std::io::{BufRead, Write};
 
+use crate::lut::Lut1D;
+
 pub fn write_1d<W: Write>(
     mut writer: W,
     range_min: [f32; 3],
@@ -43,9 +45,7 @@ pub fn write_1d<W: Write>(
 }
 
 /// Reads a 1D .cube file.
-///
-/// Returns (range_min, range_max, table) for each channel.
-pub fn read_1d<R: BufRead>(reader: R) -> Result<[(f32, f32, Vec<f32>); 3], super::ReadError> {
+pub fn read_1d<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
     // let mut name: Option<String> = None;
     let mut range_min = [0.0f32; 3];
     let mut range_max = [1.0f32; 3];
@@ -95,11 +95,14 @@ pub fn read_1d<R: BufRead>(reader: R) -> Result<[(f32, f32, Vec<f32>); 3], super
 
     let [table_r, table_g, table_b] = tables;
     match length {
-        Some(len) if len == table_r.len() => Ok([
-            (range_min[0], range_max[0], table_r),
-            (range_min[1], range_max[1], table_g),
-            (range_min[2], range_max[2], table_b),
-        ]),
+        Some(len) if len == table_r.len() => Ok(Lut1D {
+            ranges: vec![
+                (range_min[0], range_max[0]),
+                (range_min[1], range_max[1]),
+                (range_min[2], range_max[2]),
+            ],
+            tables: vec![table_r, table_g, table_b],
+        }),
         _ => Err(super::ReadError::FormatErr),
     }
 }

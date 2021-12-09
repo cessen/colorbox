@@ -2,6 +2,8 @@
 
 use std::io::{BufRead, Write};
 
+use crate::lut::Lut1D;
+
 /// Writes an SPI 1D LUT file.
 ///
 /// Takes a variable number of tables between 1 and 3.  A 1 to
@@ -34,28 +36,13 @@ pub fn write<W: Write>(
 }
 
 /// Reads an SPI 1D LUT file.
-///
-/// .spi1d supports between 1 and 3 separate component tables.
-/// Following the source code in Open Color IO for reading .spi1d files,
-/// we always return 3 component tables, which are filled in as follows
-/// depending on the number of components in the LUT file:
-///
-/// - 1 component: all three tables are filled in with the same data
-///     from the LUT file.
-/// - 2 components: the first two tables are filled in with the
-///   corresponding component data, and the third table is filled with
-///   zeros.
-/// - 3 components: all three tables are filled in with the corresponding
-///   component data.
-///
-/// Returns (range_min, range_max, component_count, tables).
-pub fn read<R: BufRead>(reader: R) -> Result<(f32, f32, usize, [Vec<f32>; 3]), super::ReadError> {
+pub fn read<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
     // let mut name: Option<String> = None;
     let mut range_min = 0.0;
     let mut range_max = 1.0;
     let mut length = 0;
     let mut components = 0;
-    let mut tables = [Vec::new(), Vec::new(), Vec::new()];
+    let mut tables = Vec::new();
     let mut reading_table = false;
 
     for line in reader.lines() {
@@ -87,6 +74,10 @@ pub fn read<R: BufRead>(reader: R) -> Result<(f32, f32, usize, [Vec<f32>; 3]), s
                 if length == 0 || components < 1 || components > 3 {
                     return Err(super::ReadError::FormatErr);
                 }
+                // Prep the tables.
+                for _ in 0..components {
+                    tables.push(Vec::new());
+                }
                 reading_table = true;
                 continue;
             } else {
@@ -97,23 +88,8 @@ pub fn read<R: BufRead>(reader: R) -> Result<(f32, f32, usize, [Vec<f32>; 3]), s
             if parts[0] == "}" {
                 break;
             } else if parts.len() == components {
-                match components {
-                    1 => {
-                        tables[0].push(parts[0].parse::<f32>()?);
-                        tables[1].push(parts[0].parse::<f32>()?);
-                        tables[2].push(parts[0].parse::<f32>()?);
-                    }
-                    2 => {
-                        tables[0].push(parts[0].parse::<f32>()?);
-                        tables[1].push(parts[1].parse::<f32>()?);
-                        tables[2].push(0.0);
-                    }
-                    3 => {
-                        tables[0].push(parts[0].parse::<f32>()?);
-                        tables[1].push(parts[1].parse::<f32>()?);
-                        tables[2].push(parts[2].parse::<f32>()?);
-                    }
-                    _ => unreachable!(),
+                for i in 0..components {
+                    tables[i].push(parts[i].parse::<f32>()?);
                 }
                 continue;
             } else {
@@ -124,7 +100,10 @@ pub fn read<R: BufRead>(reader: R) -> Result<(f32, f32, usize, [Vec<f32>; 3]), s
     }
 
     if length == tables[0].len() {
-        Ok((range_min, range_max, components, tables))
+        Ok(Lut1D {
+            ranges: vec![(range_min, range_max)],
+            tables: tables,
+        })
     } else {
         Err(super::ReadError::FormatErr)
     }
