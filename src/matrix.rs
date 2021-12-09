@@ -265,6 +265,24 @@ pub fn multiply(a: Matrix, b: Matrix) -> Matrix {
     c
 }
 
+/// Composes matrices together as a sequence of transforms.
+#[macro_export]
+macro_rules! matrix_compose {
+    ( $( $x:expr),* $(,)? ) => {
+        {
+            let mut temp = [
+                1.0, 0.0, 0.0,
+                0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0,
+            ];
+            $(
+                $crate::matrix::multiply(temp, $x);
+            )*
+            temp
+        }
+    };
+}
+
 /// Converts to a 3x3 f32 matrix with a flattened layout.
 pub fn to_3x3_f32(m: Matrix) -> [f32; 9] {
     [
