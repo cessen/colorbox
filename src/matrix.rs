@@ -1,4 +1,10 @@
 //! Functions and types for building and working with color transform matrices.
+//!
+//! For the sake of precision during construction, all the functions in
+//! this module work with `f64` matrices.  However, after construction
+//! you generally want to convert to `f32` for actual use.  The
+//! `to_3x3_f32()` and `to_4x4_f32()` functions are provided for that
+//! purpose.
 
 use crate::chroma::Chromaticities;
 
@@ -257,6 +263,43 @@ pub fn multiply(a: Matrix, b: Matrix) -> Matrix {
     c[2][2] = (b[2][0] * a[0][2]) + (b[2][1] * a[1][2]) + (b[2][2] * a[2][2]);
 
     c
+}
+
+/// Converts to a 3x3 f32 matrix with a flattened layout.
+pub fn to_3x3_f32(m: Matrix) -> [f32; 9] {
+    [
+        m[0][0] as f32,
+        m[0][1] as f32,
+        m[0][2] as f32,
+        m[1][0] as f32,
+        m[1][1] as f32,
+        m[1][2] as f32,
+        m[2][0] as f32,
+        m[2][1] as f32,
+        m[2][2] as f32,
+    ]
+}
+
+/// Converts to a 4x4 f32 matrix with a flattened layout.
+pub fn to_4x4_f32(m: Matrix) -> [f32; 16] {
+    [
+        m[0][0] as f32,
+        m[0][1] as f32,
+        m[0][2] as f32,
+        0.0,
+        m[1][0] as f32,
+        m[1][1] as f32,
+        m[1][2] as f32,
+        0.0,
+        m[2][0] as f32,
+        m[2][1] as f32,
+        m[2][2] as f32,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
 }
 
 /// Transforms a color by a matrix.

@@ -32,7 +32,7 @@ impl Default for Lut1D {
 /// data is laid out such that the following formula can be used to
 /// compute the index of the element at `x,y,z` (or `r,g,b`, etc.):
 ///
-/// ```
+/// ```ignore
 /// index = x + (y * resolution[0]) + (z * resolution[0] * resolution[1]);
 /// ```
 #[derive(Debug, Clone)]
