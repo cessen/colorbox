@@ -21,6 +21,23 @@ impl Default for Lut1D {
     }
 }
 
+impl Lut1D {
+    /// Creates a single-component 1D LUT from a function and input range.
+    pub fn from_fn_1<F: Fn(f32) -> f32>(points: usize, min_x: f32, max_x: f32, f: F) -> Lut1D {
+        let inc = (max_x as f64 - min_x as f64) / (points - 1) as f64;
+        let mut table = Vec::new();
+        for i in 0..points {
+            let x = min_x + (inc * i as f64) as f32;
+            table.push(f(x));
+        }
+
+        Lut1D {
+            ranges: vec![(min_x, max_x)],
+            tables: vec![table],
+        }
+    }
+}
+
 /// A 3D lookup table.
 ///
 /// `range` specifies the range of the input cube coordinates on all
