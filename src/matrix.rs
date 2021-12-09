@@ -273,9 +273,9 @@ macro_rules! matrix_compose {
     ( $( $x:expr),* $(,)? ) => {
         {
             let mut temp = [
-                1.0, 0.0, 0.0,
-                0.0, 1.0, 0.0,
-                0.0, 0.0, 1.0,
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
             ];
             $(
                 $crate::matrix::multiply(temp, $x);
