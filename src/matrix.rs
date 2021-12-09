@@ -63,6 +63,11 @@ pub fn rgb_to_xyz_matrix(chroma: Chromaticities) -> Matrix {
     mat
 }
 
+/// Inverse of `rgb_to_xyz_matrix()`.
+pub fn xyz_to_rgb_matrix(chroma: Chromaticities) -> Matrix {
+    invert(rgb_to_xyz_matrix(chroma)).unwrap()
+}
+
 /// Computes a matrix to transform colors from one RGB color space to
 /// another.
 ///
@@ -72,10 +77,7 @@ pub fn rgb_to_xyz_matrix(chroma: Chromaticities) -> Matrix {
 /// `src` space will not map to `1,1,1` in the `dst` space.
 #[inline]
 pub fn rgb_to_rgb_matrix(src: Chromaticities, dst: Chromaticities) -> Matrix {
-    let a = rgb_to_xyz_matrix(src);
-    let b = invert(rgb_to_xyz_matrix(dst)).unwrap();
-
-    multiply(a, b)
+    multiply(rgb_to_xyz_matrix(src), xyz_to_rgb_matrix(dst))
 }
 
 /// Chromatic adaptation methods.
