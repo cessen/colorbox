@@ -9,8 +9,7 @@ use crate::lut::Lut1D;
 
 pub fn write_1d<W: Write>(
     mut writer: W,
-    range_min: [f32; 3],
-    range_max: [f32; 3],
+    ranges: [(f32, f32); 3],
     tables: [&[f32]; 3],
 ) -> std::io::Result<()> {
     assert!(tables[0].len() == tables[1].len() && tables[1].len() == tables[2].len());
@@ -19,14 +18,14 @@ pub fn write_1d<W: Write>(
     writer.write_all(
         format!(
             "DOMAIN_MIN {:0.7} {:0.7} {:0.7}\n",
-            range_min[0], range_min[1], range_min[2],
+            ranges[0].0, ranges[1].0, ranges[2].0,
         )
         .as_bytes(),
     )?;
     writer.write_all(
         format!(
             "DOMAIN_MAX {:0.7} {:0.7} {:0.7}\n",
-            range_max[0], range_max[1], range_max[2],
+            ranges[0].1, ranges[1].1, ranges[2].1,
         )
         .as_bytes(),
     )?;
@@ -47,8 +46,7 @@ pub fn write_1d<W: Write>(
 /// Reads a 1D .cube file.
 pub fn read_1d<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
     // let mut name: Option<String> = None;
-    let mut range_min = [0.0f32; 3];
-    let mut range_max = [1.0f32; 3];
+    let mut ranges = [(0.0f32, 1.0f32); 3];
     let mut length = None;
     let mut tables = [Vec::new(), Vec::new(), Vec::new()];
 
@@ -66,18 +64,14 @@ pub fn read_1d<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
             // name = Some(name_parts[1].into());
             continue;
         } else if parts[0] == "DOMAIN_MIN" && parts.len() == 4 {
-            range_min = [
-                parts[1].parse::<f32>()?,
-                parts[2].parse::<f32>()?,
-                parts[3].parse::<f32>()?,
-            ];
+            ranges[0].0 = parts[1].parse::<f32>()?;
+            ranges[1].0 = parts[2].parse::<f32>()?;
+            ranges[2].0 = parts[3].parse::<f32>()?;
             continue;
         } else if parts[0] == "DOMAIN_MAX" && parts.len() == 4 {
-            range_max = [
-                parts[1].parse::<f32>()?,
-                parts[2].parse::<f32>()?,
-                parts[3].parse::<f32>()?,
-            ];
+            ranges[0].1 = parts[1].parse::<f32>()?;
+            ranges[1].1 = parts[2].parse::<f32>()?;
+            ranges[2].1 = parts[3].parse::<f32>()?;
             continue;
         } else if parts[0] == "LUT_1D_SIZE" && parts.len() == 2 {
             length = Some(parts[1].parse::<usize>()?);
@@ -96,11 +90,7 @@ pub fn read_1d<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
     let [table_r, table_g, table_b] = tables;
     match length {
         Some(len) if len == table_r.len() => Ok(Lut1D {
-            ranges: vec![
-                (range_min[0], range_max[0]),
-                (range_min[1], range_max[1]),
-                (range_min[2], range_max[2]),
-            ],
+            ranges: vec![ranges[0], ranges[1], ranges[2]],
             tables: vec![table_r, table_g, table_b],
         }),
         _ => Err(super::ReadError::FormatErr),
