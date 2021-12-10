@@ -278,7 +278,7 @@ macro_rules! matrix_compose {
                 [0.0, 0.0, 1.0],
             ];
             $(
-                $crate::matrix::multiply(temp, $x);
+                temp = $crate::matrix::multiply(temp, $x);
             )*
             temp
         }
@@ -473,5 +473,19 @@ mod tests {
                 transform_color(vec5, combined_mat),
             ) < 0.000_000_000_000_001
         );
+    }
+
+    #[test]
+    fn matrix_compose_test() {
+        let m1 = [[2.0, 3.0, 4.0], [5.0, 6.0, 7.0], [8.0, 9.0, 10.0]];
+        let m2 = [[64.0, 16.0, 8.0], [4.0, 2.0, 1.0], [0.5, 0.25, 0.125]];
+        let m3 = [[5.0, 62.4, 7.7], [4.0, 23.0, 2.1], [12.66, 8.3, 42.0]];
+
+        let out1 = multiply(multiply(m1, m2), m3);
+        let out2 = matrix_compose!(m1, m2, m3);
+
+        for (n1, n2) in out1.iter().flatten().zip(out2.iter().flatten()) {
+            assert_eq!(n1, n2);
+        }
     }
 }
