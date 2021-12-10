@@ -3,4 +3,5 @@ pub mod chroma;
 pub mod formats;
 pub mod lut;
 pub mod matrix;
+pub mod tables;
 pub mod transfer_functions;
