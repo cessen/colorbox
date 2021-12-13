@@ -1,9 +1,9 @@
 [package]
 name = "colorbox"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Nathan Vegdahl <cessen@cessen.com>"]
-description = "A low-level toolbox for working with color transforms"
+description = "A low-level toolbox for working with color"
 documentation = "https://docs.rs/colorbox"
 repository = "https://github.com/cessen/colorbox"
 readme = "README.md"

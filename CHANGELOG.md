@@ -4,6 +4,18 @@
 ## [Unreleased]
 
 
+## [0.2.0] - 2021-12-13
+
+### Additions
+
+- Chromaticities of more color spaces.
+- Functions to read and write some common LUT formats.
+- Types for working with LUTs in memory.
+- Functions to convert matrices to more common data layouts.
+- A macro to compose multiple matrices together.
+- Tables of the CIE 1931 XYZ spectral sensitivity curves.
+
+
 ## [0.1.0] - 2021-12-04
 
 ### First Release

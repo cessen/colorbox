@@ -1,3 +1,5 @@
+//! Types for storing and working with LUTs in memory.
+
 /// A 1D look up table.
 ///
 /// The `ranges` specify the input range that the table indices map to.
@@ -39,8 +41,9 @@ impl Lut1D {
 
     /// Inverts the lut, resampling it to the given number of samples.
     ///
-    /// This assumes that the table is monotonically increasing.  Always
-    /// maintains the same number of `ranges` and `tables`.
+    /// This assumes that the table is monotonically increasing.  This
+    /// always maintains the same number of `ranges` and `tables` as the
+    /// input.
     pub fn resample_inverted(&self, samples: usize) -> Lut1D {
         if self.ranges.len() == 1 {
             let mut lut = Lut1D {

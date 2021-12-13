@@ -7,6 +7,7 @@ use std::io::{BufRead, Write};
 
 use crate::lut::Lut1D;
 
+/// Writes a 1D .cube file.
 pub fn write_1d<W: Write>(
     mut writer: W,
     ranges: [(f32, f32); 3],

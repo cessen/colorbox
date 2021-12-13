@@ -1,4 +1,4 @@
-//! SPI's 1D LUT format.
+//! Sony Pictures Imageworks' 1D LUT format.
 
 use std::io::{BufRead, Write};
 

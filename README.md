@@ -3,11 +3,11 @@
 [![Latest Release][crates-io-badge]][crates-io-url]
 [![Documentation][docs-rs-img]][docs-rs-url]
 
-A low-level toolbox for working with color transforms.
+A low-level toolbox for working with color.
 
 ColorBox does NOT provide any kind of framework for doing color
-management or maintaining color pipelines, it only provides tools for
-constructing and working with color transforms.  As such, most people
+management or maintaining color pipelines, it only provides the
+building-block components for working with color.  As such, most people
 probably won't want to use this crate directly.
 
 

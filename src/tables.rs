@@ -1,4 +1,8 @@
+//! Tables of data commonly used in color science.
+
 /// The CIE 1931 XYZ spectral sensitivity curves.
+///
+/// Sampled at 5nm intervals.
 pub mod cie_1931_xyz {
     pub const MIN_WAVELENGTH: f32 = 360.0;
     pub const MAX_WAVELENGTH: f32 = 830.0;
