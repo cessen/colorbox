@@ -104,12 +104,9 @@ pub mod rec709 {
 
 /// Perceptual Quantizer from Rec.2100.
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between linear
-/// [0.0, `LUMINANCE_MAX`] and non-linear [0.0, 1.0].
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping, use the `*_norm()`
-/// functions instead, which simply scale `LUMINANCE_MAX` to 1.0.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between linear
+/// [0.0, `LUMINANCE_MAX`] (in cd/m^2) and non-linear [0.0, 1.0].
 pub mod pq {
     /// The maximum allowed luminance of linear values, in cd/m^2.
     pub const LUMINANCE_MAX: f32 = 10000.0;
@@ -128,7 +125,10 @@ pub mod pq {
     #[inline(always)]
     pub fn from_linear(n: f32) -> f32 {
         assert!(n >= 0.0 && n <= LUMINANCE_MAX);
-        from_linear_norm(n / LUMINANCE_MAX)
+        let n = n * (1.0 / LUMINANCE_MAX);
+
+        let n_m1 = n.powf(M1);
+        ((C1 + (C2 * n_m1)) / (1.0 + (C3 * n_m1))).powf(M2)
     }
 
     /// PQ -> Linear.
@@ -139,22 +139,11 @@ pub mod pq {
     #[inline(always)]
     pub fn to_linear(n: f32) -> f32 {
         assert!(n >= 0.0 && n <= 1.0);
-        to_linear_norm(n) * LUMINANCE_MAX
-    }
 
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    #[inline]
-    pub fn from_linear_norm(n: f32) -> f32 {
-        let n_m1 = n.powf(M1);
-        ((C1 + (C2 * n_m1)) / (1.0 + (C3 * n_m1))).powf(M2)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    #[inline]
-    pub fn to_linear_norm(n: f32) -> f32 {
         let n_1_m2 = n.powf(1.0 / M2);
+        let linear = ((n_1_m2 - C1).max(0.0) / (C2 - (C3 * n_1_m2))).powf(1.0 / M1);
 
-        ((n_1_m2 - C1).max(0.0) / (C2 - (C3 * n_1_m2))).powf(1.0 / M1)
+        linear * LUMINANCE_MAX
     }
 
     #[cfg(test)]
@@ -163,14 +152,14 @@ pub mod pq {
 
         #[test]
         fn from_linear_test() {
-            assert!((from_linear_norm(0.0) - 0.0).abs() < 0.000_001);
-            assert!((from_linear_norm(1.0) - 1.0).abs() < 0.000_001);
+            assert!((from_linear(0.0) - 0.0).abs() < 0.000_001);
+            assert!((from_linear(LUMINANCE_MAX) - 1.0).abs() < 0.000_001);
         }
 
         #[test]
         fn to_linear_test() {
-            assert!((to_linear_norm(0.0) - 0.0).abs() < 0.000_001);
-            assert!((to_linear_norm(1.0) - 1.0).abs() < 0.000_001);
+            assert!((to_linear(0.0) - 0.0).abs() < 0.000_001);
+            assert!((to_linear(1.0) - LUMINANCE_MAX).abs() < 0.000_001);
         }
 
         #[test]
@@ -178,7 +167,7 @@ pub mod pq {
             for i in 0..1024 {
                 let n = i as f32 / 1023.0;
                 dbg!(n);
-                assert!((n - to_linear_norm(from_linear_norm(n))).abs() < 0.000_1);
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_1);
             }
         }
     }
@@ -248,20 +237,17 @@ pub mod hlg {
 
 /// Sony's S-Log (original).
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
 pub mod sony_slog1 {
     /// The normalized code value of scene-linear 0.0.
     pub const CV_BLACK: f32 = 0.088251315;
 
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.63855165;
+    /// The normalized code value of camera sensor saturation.
+    pub const CV_SATURATION: f32 = SLOG_WHITE;
 
     /// The scene-linear value of normalized code value 0.0.
     pub const LINEAR_MIN: f32 = -0.014279289;
@@ -306,41 +292,6 @@ pub mod sony_slog1 {
         y * 0.9
     }
 
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    #[inline(always)]
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    #[inline(always)]
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -368,24 +319,6 @@ pub mod sony_slog1 {
         }
 
         #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
         fn round_trip() {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
@@ -397,30 +330,27 @@ pub mod sony_slog1 {
 
 /// Sony's S-Log2.
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
 pub mod sony_slog2 {
+    /// Misc internal constants used on the S-Log2 formulas.
+    const SLOG2_BLACK: f32 = 64.0 / 1023.0;
+    const SLOG2_WHITE: f32 = 940.0 / 1023.0;
+
     /// The normalized code value of scene-linear 0.0.
     pub const CV_BLACK: f32 = 0.088251315;
 
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.58509105;
+    /// The normalized code value of camera sensor saturation.
+    pub const CV_SATURATION: f32 = SLOG2_WHITE;
 
     /// The scene-linear value of normalized code value 0.0.
     pub const LINEAR_MIN: f32 = -0.026210632;
 
     /// The scene-linear value of normalized code value 1.0.
     pub const LINEAR_MAX: f32 = 13.758276;
-
-    /// Misc internal constants used on the S-Log2 formulas.
-    const SLOG2_BLACK: f32 = 64.0 / 1023.0;
-    const SLOG2_WHITE: f32 = 940.0 / 1023.0;
 
     /// From scene linear to (normalized) code values.
     ///
@@ -462,41 +392,6 @@ pub mod sony_slog2 {
         y * 0.9
     }
 
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    #[inline(always)]
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    #[inline(always)]
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -520,24 +415,6 @@ pub mod sony_slog2 {
         }
 
         #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
         fn round_trip() {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
@@ -549,20 +426,14 @@ pub mod sony_slog2 {
 
 /// Sony's S-Log3.
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
 pub mod sony_slog3 {
     /// The normalized code value of scene-linear 0.0.
     pub const CV_BLACK: f32 = 0.092864126;
-
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.5960273;
 
     /// The scene-linear value of normalized code value 0.0.
     pub const LINEAR_MIN: f32 = -0.014023696;
@@ -594,39 +465,6 @@ pub mod sony_slog3 {
         }
     }
 
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -650,24 +488,6 @@ pub mod sony_slog3 {
         }
 
         #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
         fn round_trip() {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
@@ -679,25 +499,19 @@ pub mod sony_slog3 {
 
 /// Canon Log (original).
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and a
+/// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+/// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+/// to a much greater than 1.0 scene-linear value.
 pub mod canon_log1 {
-    /// The normalized code value of scene-linear 0.0.
-    pub const CV_BLACK: f32 = 0.12512247;
+    /// The nonlinear value of scene-linear 0.0.
+    pub const NONLINEAR_BLACK: f32 = 0.12512247;
 
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.59981394;
-
-    /// The scene-linear value of normalized code value 0.0.
+    /// The scene-linear value of nonlinear value 0.0.
     pub const LINEAR_MIN: f32 = -0.087466866;
 
-    /// The scene-linear value of normalized code value 1.0.
+    /// The scene-linear value of nonlinear value 1.0.
     pub const LINEAR_MAX: f32 = 8.295911;
 
     const A: f32 = 0.45310179;
@@ -720,39 +534,6 @@ pub mod canon_log1 {
         } else {
             (10.0f32.powf((x - C) / A) - 1.0) / B
         }
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
     }
 
     #[cfg(test)]
@@ -782,24 +563,6 @@ pub mod canon_log1 {
         }
 
         #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
         fn round_trip() {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
@@ -811,25 +574,19 @@ pub mod canon_log1 {
 
 /// Canon Log 2.
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and a
+/// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+/// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+/// to a much greater than 1.0 scene-linear value.
 pub mod canon_log2 {
-    /// The normalized code value of scene-linear 0.0.
-    pub const CV_BLACK: f32 = 0.092864126;
+    /// The nonlinear value of scene-linear 0.0.
+    pub const NONLINEAR_BLACK: f32 = 0.092864126;
 
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.56230426;
-
-    /// The scene-linear value of normalized code value 0.0.
+    /// The scene-linear value of nonlinear value 0.0.
     pub const LINEAR_MIN: f32 = -0.016363228;
 
-    /// The scene-linear value of normalized code value 1.0.
+    /// The scene-linear value of nonlinear value 1.0.
     pub const LINEAR_MAX: f32 = 65.816086;
 
     const A: f32 = 0.24136077;
@@ -852,39 +609,6 @@ pub mod canon_log2 {
         } else {
             (10.0f32.powf((x - C) / A) - 1.0) / B
         }
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
     }
 
     #[cfg(test)]
@@ -918,24 +642,6 @@ pub mod canon_log2 {
         }
 
         #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
         fn round_trip() {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
@@ -947,25 +653,19 @@ pub mod canon_log2 {
 
 /// Canon Log 3.
 ///
-/// Note: the main functions in this module are not
-/// [0.0, 1.0] -> [0.0, 1.0] mappings.  They are mappings between "scene
-/// linear" and normalized "code values".  For example, scene-linear 0.0
-/// maps to `CV_BLACK` (which is > 0.0) and scene-linear 1.0 maps to
-/// `CV_WHITE` (which is < 1.0).
-///
-/// If you want a [0.0, 1.0] -> [0.0, 1.0] mapping with the same
-/// non-linearity, use the `*_norm()` functions instead.
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and a
+/// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+/// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+/// to a much greater than 1.0 scene-linear value.
 pub mod canon_log3 {
-    /// The normalized code value of scene-linear 0.0.
-    pub const CV_BLACK: f32 = 0.12512219;
+    /// The nonlinear value of scene-linear 0.0.
+    pub const NONLINEAR_BLACK: f32 = 0.12512219;
 
-    /// The normalized code value of scene-linear 1.0.
-    pub const CV_WHITE: f32 = 0.56447357;
-
-    /// The scene-linear value of normalized code value 0.0.
+    /// The scene-linear value of nonlinear value 0.0.
     pub const LINEAR_MIN: f32 = -0.08201483;
 
-    /// The scene-linear value of normalized code value 1.0.
+    /// The scene-linear value of nonlinear value 1.0.
     pub const LINEAR_MAX: f32 = 16.298117;
 
     const A: f32 = 14.98325;
@@ -1000,39 +700,6 @@ pub mod canon_log3 {
         }
     }
 
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `from_linear()`.
-    ///
-    /// This takes a scene-linear input of [0.0, 1.0], representing
-    /// radiometric zero to `LINEAR_MAX`, and outputs a value in
-    /// [0.0, 1.0] with the same nonlinearity as the
-    /// [radiometric_zero, `LINEAR_MAX`] portion of the log curve.
-    pub fn from_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = x * LINEAR_MAX;
-
-        let y = from_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        (y - CV_BLACK) / (1.0 - CV_BLACK)
-    }
-
-    /// [0.0, 1.0] -> [0.0, 1.0] version of `to_linear()`.
-    ///
-    /// Inverse of `from_linear_norm()`.
-    pub fn to_linear_norm(x: f32) -> f32 {
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        let x = CV_BLACK + (x * (1.0 - CV_BLACK));
-
-        let y = to_linear(x);
-
-        // Adjustment to map 0.0 to 0.0 and 1.0 to 1.0.
-        // Note: this is not part of the official mapping curve.
-        y / LINEAR_MAX
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -1059,24 +726,6 @@ pub mod canon_log3 {
             assert!((to_linear(0.564) - 1.0).abs() < 0.004);
             assert!((to_linear(0.887) - 8.0).abs() < 0.01);
             assert!((to_linear(0.997) - 16.0).abs() < 0.01);
-        }
-
-        #[test]
-        fn from_linear_norm_test() {
-            assert!(from_linear_norm(0.0) >= 0.0);
-            assert!(from_linear_norm(0.0) <= 0.00001);
-
-            assert!((from_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((from_linear_norm(1.0) - 1.0) >= -0.00001);
-        }
-
-        #[test]
-        fn to_linear_norm_test() {
-            assert!(to_linear_norm(0.0) >= 0.0);
-            assert!(to_linear_norm(0.0) <= 0.00001);
-
-            assert!((to_linear_norm(1.0) - 1.0) <= 0.0);
-            assert!((to_linear_norm(1.0) - 1.0) >= -0.00001);
         }
 
         #[test]
