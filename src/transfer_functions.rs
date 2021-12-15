@@ -124,10 +124,21 @@ pub mod pq {
     /// Output is in the range [0.0, 1.0].
     #[inline(always)]
     pub fn from_linear(n: f32) -> f32 {
-        let n = n * (1.0 / LUMINANCE_MAX);
+        // Hack so the function is well defined below 0.0.
+        let flip = n < 0.0;
+        let n = n.abs();
 
+        // The actual transfer function.
+        let n = n * (1.0 / LUMINANCE_MAX);
         let n_m1 = n.powf(M1);
-        ((C1 + (C2 * n_m1)) / (1.0 + (C3 * n_m1))).powf(M2)
+        let out = ((C1 + (C2 * n_m1)) / (1.0 + (C3 * n_m1))).powf(M2);
+
+        // Hack again.
+        if flip {
+            out * -1.0
+        } else {
+            out
+        }
     }
 
     /// PQ -> Linear.
@@ -137,10 +148,21 @@ pub mod pq {
     /// luminance in cd/m^2.
     #[inline(always)]
     pub fn to_linear(n: f32) -> f32 {
+        // Hack so the function is well defined below 0.0.
+        let flip = n < 0.0;
+        let n = n.abs();
+
+        // The actual transfer function.
         let n_1_m2 = n.powf(1.0 / M2);
         let linear = ((n_1_m2 - C1).max(0.0) / (C2 - (C3 * n_1_m2))).powf(1.0 / M1);
+        let out = linear * LUMINANCE_MAX;
 
-        linear * LUMINANCE_MAX
+        // Hack again.
+        if flip {
+            out * -1.0
+        } else {
+            out
+        }
     }
 
     #[cfg(test)]
