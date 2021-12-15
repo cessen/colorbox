@@ -39,7 +39,7 @@ impl Lut1D {
         }
     }
 
-    /// Inverts the lut, resampling it to the given number of samples.
+    /// Inverts the LUT, resampling it to the given number of samples.
     ///
     /// This assumes that the table is monotonically increasing.  This
     /// always maintains the same number of `ranges` and `tables` as the
@@ -113,6 +113,42 @@ impl Default for Lut3D {
             tables: Vec::new(),
         }
     }
+}
+
+/// Helper function for resampling 1D LUTs.
+///
+/// - `new_samples` is the sample count of the new table.
+/// - `sample_range` is the range of the old table to sample.
+/// - `old_table` is the table to resample, treated as a 1D table with
+///   an input range of [0.0, 1.0].
+pub fn resample(new_samples: usize, sample_range: (f32, f32), old_table: &[f32]) -> Vec<f32> {
+    let mut new_table = Vec::new();
+
+    for i in 0..new_samples {
+        let x = i as f32 / (new_samples - 1) as f32;
+        let x = sample_range.0 + (x * (sample_range.1 - sample_range.0));
+
+        let y = if x <= 0.0 {
+            // Off the end.
+            old_table[0]
+        } else {
+            let j = x * (old_table.len() - 1) as f32;
+            let j1 = j as usize;
+            let j2 = j1 + 1;
+            if j2 >= old_table.len() {
+                // Off the end.
+                *old_table.last().unwrap()
+            } else {
+                // Lerp.
+                let alpha = j - j1 as f32;
+                (old_table[j1] * (1.0 - alpha)) + (old_table[j2] * alpha)
+            }
+        };
+
+        new_table.push(y);
+    }
+
+    new_table
 }
 
 //-------------------------------------------------------------
@@ -192,6 +228,33 @@ mod tests {
         (0..samples)
             .map(|i| func(range.0 + (i as f32 * norm)))
             .collect()
+    }
+
+    #[test]
+    fn resample_01() {
+        let lut1 = vec![0.0, 0.25, 1.0];
+
+        let lut2 = resample(5, (0.0, 1.0), &lut1);
+
+        assert_eq!(&lut2, &[0.0, 0.125, 0.25, 0.625, 1.0]);
+    }
+
+    #[test]
+    fn resample_02() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(2, (0.25, 0.75), &lut1);
+
+        assert_eq!(&lut2, &[0.25, 0.75]);
+    }
+
+    #[test]
+    fn resample_03() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(3, (-0.25, 1.25), &lut1);
+
+        assert_eq!(&lut2, &[0.0, 0.5, 1.0]);
     }
 
     #[test]
