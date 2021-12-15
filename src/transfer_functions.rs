@@ -124,7 +124,6 @@ pub mod pq {
     /// Output is in the range [0.0, 1.0].
     #[inline(always)]
     pub fn from_linear(n: f32) -> f32 {
-        assert!(n >= 0.0 && n <= LUMINANCE_MAX);
         let n = n * (1.0 / LUMINANCE_MAX);
 
         let n_m1 = n.powf(M1);
@@ -138,8 +137,6 @@ pub mod pq {
     /// luminance in cd/m^2.
     #[inline(always)]
     pub fn to_linear(n: f32) -> f32 {
-        assert!(n >= 0.0 && n <= 1.0);
-
         let n_1_m2 = n.powf(1.0 / M2);
         let linear = ((n_1_m2 - C1).max(0.0) / (C2 - (C3 * n_1_m2))).powf(1.0 / M1);
 
@@ -185,7 +182,6 @@ pub mod hlg {
     pub fn from_linear(n: f32) -> f32 {
         let c = 0.5 - (A * (4.0 * A).ln()); // Should be a `const`, but can't because of `ln()`.
 
-        assert!(n >= 0.0 && n <= 1.0);
         if n <= (1.0 / 12.0) {
             (3.0 * n).sqrt()
         } else {
@@ -200,7 +196,6 @@ pub mod hlg {
     pub fn to_linear(n: f32) -> f32 {
         let c = 0.5 - (A * (4.0 * A).ln()); // Should be a `const`, but can't because of `ln()`.
 
-        assert!(n >= 0.0 && n <= 1.0);
         if n <= 0.5 {
             (n * n) / 3.0
         } else {
