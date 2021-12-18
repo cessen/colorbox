@@ -5,6 +5,7 @@
 
 use std::io::{BufRead, Write};
 
+use super::filter_non_finite;
 use crate::lut::Lut1D;
 
 /// Writes a 1D .cube file.
@@ -19,14 +20,18 @@ pub fn write_1d<W: Write>(
     writer.write_all(
         format!(
             "DOMAIN_MIN {:0.7} {:0.7} {:0.7}\n",
-            ranges[0].0, ranges[1].0, ranges[2].0,
+            filter_non_finite(ranges[0].0),
+            filter_non_finite(ranges[1].0),
+            filter_non_finite(ranges[2].0),
         )
         .as_bytes(),
     )?;
     writer.write_all(
         format!(
             "DOMAIN_MAX {:0.7} {:0.7} {:0.7}\n",
-            ranges[0].1, ranges[1].1, ranges[2].1,
+            filter_non_finite(ranges[0].1),
+            filter_non_finite(ranges[1].1),
+            filter_non_finite(ranges[2].1),
         )
         .as_bytes(),
     )?;
@@ -38,7 +43,15 @@ pub fn write_1d<W: Write>(
         .zip(tables[1].iter().copied())
         .zip(tables[2].iter().copied())
     {
-        writer.write_all(format!("{:0.7} {:0.7} {:0.7}\n", r, g, b).as_bytes())?;
+        writer.write_all(
+            format!(
+                "{:0.7} {:0.7} {:0.7}\n",
+                filter_non_finite(r),
+                filter_non_finite(g),
+                filter_non_finite(b),
+            )
+            .as_bytes(),
+        )?;
     }
 
     Ok(())

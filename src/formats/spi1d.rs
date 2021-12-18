@@ -2,6 +2,7 @@
 
 use std::io::{BufRead, Write};
 
+use super::filter_non_finite;
 use crate::lut::Lut1D;
 
 /// Writes an SPI 1D LUT file.
@@ -19,14 +20,21 @@ pub fn write<W: Write>(
     assert!(tables.iter().all(|t| t.len() == tables[0].len()));
 
     writer.write_all(b"Version 1\n")?;
-    writer.write_all(format!("From {:0.7} {:0.7}\n", range_min, range_max).as_bytes())?;
+    writer.write_all(
+        format!(
+            "From {:0.7} {:0.7}\n",
+            filter_non_finite(range_min),
+            filter_non_finite(range_max)
+        )
+        .as_bytes(),
+    )?;
     writer.write_all(format!("Length {}\n", tables[0].len()).as_bytes())?;
     writer.write_all(format!("Components {}\n", tables.len()).as_bytes())?;
     writer.write_all(b"{\n")?;
     for i in 0..tables[0].len() {
         writer.write_all(b" ")?;
         for t in tables.iter() {
-            writer.write_all(format!(" {:0.7}", t[i]).as_bytes())?;
+            writer.write_all(format!(" {:0.7}", filter_non_finite(t[i])).as_bytes())?;
         }
         writer.write_all(b"\n")?;
     }

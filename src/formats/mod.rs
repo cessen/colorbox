@@ -3,6 +3,14 @@
 pub mod cube;
 pub mod spi1d;
 
+fn filter_non_finite(n: f32) -> f32 {
+    if n.is_finite() {
+        n
+    } else {
+        0.0
+    }
+}
+
 #[derive(Debug)]
 pub enum ReadError {
     IoErr(std::io::Error),
