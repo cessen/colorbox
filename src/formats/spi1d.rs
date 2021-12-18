@@ -99,6 +99,14 @@ pub fn read<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
         }
     }
 
+    if !tables.iter().flatten().all(|n| n.is_finite())
+        || !range_min.is_finite()
+        || !range_max.is_finite()
+    {
+        // Non-finite values in the file.
+        return Err(super::ReadError::FormatErr);
+    }
+
     if length == tables[0].len() {
         Ok(Lut1D {
             ranges: vec![(range_min, range_max)],

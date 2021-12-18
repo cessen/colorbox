@@ -88,6 +88,13 @@ pub fn read_1d<R: BufRead>(reader: R) -> Result<Lut1D, super::ReadError> {
         }
     }
 
+    if !tables.iter().flatten().all(|n| n.is_finite())
+        || !ranges.iter().all(|(a, b)| a.is_finite() && b.is_finite())
+    {
+        // Non-finite values in the file.
+        return Err(super::ReadError::FormatErr);
+    }
+
     let [table_r, table_g, table_b] = tables;
     match length {
         Some(len) if len == table_r.len() => Ok(Lut1D {
