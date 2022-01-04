@@ -360,15 +360,54 @@ mod tests {
 
     #[test]
     fn rgb_to_xyz_test() {
-        let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP0);
-
+        let mat = rgb_to_xyz_matrix(crate::chroma::REC709);
         assert!(
             matrix_max_diff(
                 mat,
                 [
+                    [0.4123907992, 0.3575843393, 0.1804807884],
+                    [0.2126390058, 0.7151686787, 0.0721923153],
+                    [0.0193308187, 0.1191947797, 0.9505321522],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = rgb_to_xyz_matrix(crate::chroma::ADOBE_WIDE_GAMUT_RGB);
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.7165007167, 0.1010205743, 0.1467743852],
+                    [0.2587282430, 0.7246823149, 0.0165894420],
+                    [0.0, 0.0512118189, 0.7738927835],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP0);
+        assert!(
+            matrix_max_diff(
+                mat,
+                // Matrix from official ACES repo:
+                // https://github.com/ampas/aces-dev/blob/master/transforms/ctl/README-MATRIX.md
+                [
                     [0.9525523959, 0.0000000000, 0.0000936786],
                     [0.3439664498, 0.7281660966, -0.0721325464],
                     [0.0000000000, 0.0000000000, 1.0088251844],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP1);
+        assert!(
+            matrix_max_diff(
+                mat,
+                // Matrix from official ACES repo:
+                // https://github.com/ampas/aces-dev/blob/master/transforms/ctl/README-MATRIX.md
+                [
+                    [0.6624541811, 0.1340042065, 0.1561876870],
+                    [0.2722287168, 0.6740817658, 0.0536895174],
+                    [-0.0055746495, 0.0040607335, 1.0103391003],
                 ]
             ) < 0.000_000_001
         );
@@ -377,7 +416,6 @@ mod tests {
     #[test]
     fn rgb_to_rgb_test() {
         let mat = rgb_to_rgb_matrix(crate::chroma::REC709, crate::chroma::ACES_AP0);
-
         assert!(
             matrix_max_diff(
                 mat,
@@ -388,10 +426,24 @@ mod tests {
                 ]
             ) < 0.000_000_001
         );
+
+        let mat = rgb_to_rgb_matrix(crate::chroma::ACES_AP1, crate::chroma::ACES_AP0);
+        assert!(
+            matrix_max_diff(
+                mat,
+                // Matrix from official ACES repo:
+                // https://github.com/ampas/aces-dev/blob/master/transforms/ctl/README-MATRIX.md
+                [
+                    [0.6954522414, 0.1406786965, 0.1638690622],
+                    [0.0447945634, 0.8596711185, 0.0955343182],
+                    [-0.0055258826, 0.0040252103, 1.0015006723],
+                ]
+            ) < 0.000_000_001
+        );
     }
 
     #[test]
-    fn chromatic_adaptation_test() {
+    fn chromatic_adaptation_test_01() {
         let to_xyz = rgb_to_xyz_matrix(crate::chroma::REC709);
         let adapt_xyz = xyz_chromatic_adaptation_matrix(
             crate::chroma::REC709.w,
@@ -416,6 +468,75 @@ mod tests {
         assert!(vec_max_diff(white_1, [1.0, 1.0, 1.0]) < 0.000_000_001);
         assert!(vec_max_diff(white_2, [1.0, 1.0, 1.0]) < 0.000_000_001);
         assert!(vec_max_diff(white_3, [1.0, 1.0, 1.0]) < 0.000_000_001);
+    }
+
+    #[test]
+    fn chromatic_adaptation_test_02() {
+        let mat = xyz_chromatic_adaptation_matrix(
+            crate::chroma::ACES_AP0.w,
+            crate::chroma::REC709.w,
+            AdaptationMethod::Bradford,
+        );
+        assert!(
+            matrix_max_diff(
+                mat,
+                // Matrix verified against official ACES repo:
+                // https://github.com/ampas/aces-dev/blob/master/transforms/ctl/README-MATRIX.md
+                [
+                    [0.9872240087, -0.0061132286, 0.0159532883],
+                    [-0.0075983718, 1.0018614847, 0.0053300358],
+                    [0.0030725771, -0.0050959615, 1.0816806031],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = xyz_chromatic_adaptation_matrix(
+            crate::chroma::PROPHOTO.w,
+            crate::chroma::REC709.w,
+            AdaptationMethod::XYZScale,
+        );
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.9857463844, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.3202463042],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = xyz_chromatic_adaptation_matrix(
+            crate::chroma::PROPHOTO.w,
+            crate::chroma::REC709.w,
+            AdaptationMethod::Hunt,
+        );
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.9844773043, -0.0546989286, 0.0677939921],
+                    [-0.0060082931, 1.0047945956, 0.0012105812],
+                    [0.0, 0.0, 1.3202463042],
+                ]
+            ) < 0.000_000_001
+        );
+
+        let mat = xyz_chromatic_adaptation_matrix(
+            crate::chroma::PROPHOTO.w,
+            crate::chroma::REC709.w,
+            AdaptationMethod::Bradford,
+        );
+        assert!(
+            matrix_max_diff(
+                mat,
+                [
+                    [0.9555118600, -0.0230733576, 0.0633120466],
+                    [-0.0283250104, 1.0099425961, 0.0210553666],
+                    [0.0123293595, -0.0205364519, 1.3307307257],
+                ]
+            ) < 0.000_000_001
+        );
     }
 
     #[test]
