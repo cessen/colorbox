@@ -6,7 +6,7 @@
 /// otherwise specified.
 ///
 /// `w` is the white point.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Chromaticities {
     pub r: (f64, f64),
     pub g: (f64, f64),
