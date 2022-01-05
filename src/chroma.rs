@@ -86,28 +86,32 @@ pub const PROPHOTO: Chromaticities = Chromaticities {
     w: (0.345704, 0.358540),
 };
 
-/// Sony S-Gamut/S-Gamut3 chromaticities.
-///
-/// Yes, they are exactly the same, as per page 7 of "Technical
-/// Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3" from
-/// Sony.
-pub const S_GAMUT: Chromaticities = Chromaticities {
-    r: (0.73000, 0.28000),
-    g: (0.14000, 0.85500),
-    b: (0.10000, -0.05000),
-    w: (0.31270, 0.32900),
-};
+/// Sony's color spaces.
+pub mod sony {
+    use super::*;
+    /// Sony S-Gamut/S-Gamut3 chromaticities.
+    ///
+    /// Yes, they are exactly the same, as per page 7 of "Technical
+    /// Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3" from
+    /// Sony.
+    pub const S_GAMUT: Chromaticities = Chromaticities {
+        r: (0.73000, 0.28000),
+        g: (0.14000, 0.85500),
+        b: (0.10000, -0.05000),
+        w: (0.31270, 0.32900),
+    };
 
-/// Sony S-Gamut3.Cine chromaticities.
-///
-/// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
-/// and S-Gamut3/S-Log3" from Sony.
-pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
-    r: (0.76600, 0.27500),
-    g: (0.22500, 0.80000),
-    b: (0.08900, -0.08700),
-    w: (0.31270, 0.32900),
-};
+    /// Sony S-Gamut3.Cine chromaticities.
+    ///
+    /// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
+    /// and S-Gamut3/S-Log3" from Sony.
+    pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
+        r: (0.76600, 0.27500),
+        g: (0.22500, 0.80000),
+        b: (0.08900, -0.08700),
+        w: (0.31270, 0.32900),
+    };
+}
 
 /// ALEXA Wide Gamut RGB.
 ///
@@ -129,3 +133,56 @@ pub const RED_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
     b: (0.095612, -0.084589),
     w: (0.3127, 0.3290),
 };
+
+/// Blackmagic Design's color spaces.
+pub mod blackmagic {
+    use super::*;
+
+    /// BMD Wide Gamut Gen4/Gen5.
+    pub const BMD_WIDE_GAMUT_GEN4: Chromaticities = Chromaticities {
+        r: (0.7177, 0.3171),
+        g: (0.2280, 0.8616),
+        b: (0.1006, -0.0820),
+        w: (0.3127, 0.3290),
+    };
+
+    /// BMD 4.6k Film Gen3.
+    pub const BMD_4_6K_FILM_GEN3: Chromaticities = Chromaticities {
+        r: (0.8608, 0.3689),
+        g: (0.3282, 0.6156),
+        b: (0.0783, -0.0233),
+        w: (0.3127, 0.3290),
+    };
+
+    /// BMD 4.6k Film Gen1.
+    pub const BMD_4_6K_FILM_GEN1: Chromaticities = Chromaticities {
+        r: (0.9175, 0.2983),
+        g: (0.2982, 1.2835),
+        b: (0.0756, -0.0860),
+        w: (0.3127, 0.3290),
+    };
+
+    /// BMD 4k Film Gen3.
+    pub const BMD_4K_FILM_GEN3: Chromaticities = Chromaticities {
+        r: (1.0625, 0.3948),
+        g: (0.3689, 0.7775),
+        b: (0.0956, 0.0332),
+        w: (0.3135, 0.3305),
+    };
+
+    /// BMD 4k Film Gen1.
+    pub const BMD_4K_FILM_GEN1: Chromaticities = Chromaticities {
+        r: (0.7422, 0.2859),
+        g: (0.4140, 1.3035),
+        b: (0.0342, -0.0833),
+        w: (0.3135, 0.3305),
+    };
+
+    /// BMD Film Gen1.
+    pub const BMD_FILM_GEN1: Chromaticities = Chromaticities {
+        r: (0.9173, 0.2502),
+        g: (0.2833, 1.7072),
+        b: (0.0856, -0.0708),
+        w: (0.3135, 0.3305),
+    };
+}
