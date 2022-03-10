@@ -53,9 +53,9 @@ pub const ACES_AP0: Chromaticities = Chromaticities {
 /// These are the chromaticities of e.g. the ACEScg, ACEScc, and
 /// ACEScct color spaces.
 pub const ACES_AP1: Chromaticities = Chromaticities {
-    r: (0.713, 0.293),
-    g: (0.165, 0.830),
-    b: (0.128, 0.044),
+    r: (0.71300, 0.29300),
+    g: (0.16500, 0.83000),
+    b: (0.12800, 0.04400),
     w: (0.32168, 0.33767),
 };
 
@@ -78,6 +78,14 @@ pub const ADOBE_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
     w: (0.3457, 0.3585),
 };
 
+/// DJI D-Gamut chromaticities.
+pub const DJI_D_GAMUT: Chromaticities = Chromaticities {
+    r: (0.7100, 0.3100),
+    g: (0.2100, 0.8800),
+    b: (0.0900, -0.0800),
+    w: (0.3127, 0.3290),
+};
+
 /// Kodak ProPhoto RGB chromaticities.
 pub const PROPHOTO: Chromaticities = Chromaticities {
     r: (0.734699, 0.265301),
@@ -86,19 +94,27 @@ pub const PROPHOTO: Chromaticities = Chromaticities {
     w: (0.345704, 0.358540),
 };
 
+/// Panasonic V-Gamut chromaticities.
+pub const PANASONIC_V_GAMUT: Chromaticities = Chromaticities {
+    r: (0.7300, 0.2800),
+    g: (0.1650, 0.8400),
+    b: (0.1000, -0.0300),
+    w: (0.3127, 0.3290),
+};
+
 /// Sony's color spaces.
 pub mod sony {
     use super::*;
     /// Sony S-Gamut/S-Gamut3 chromaticities.
     ///
-    /// Yes, they are exactly the same, as per page 7 of "Technical
-    /// Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3" from
-    /// Sony.
+    /// Yes, S-Gamut and S-Gamut3 have exactly the same chromaticities,
+    /// as per page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3 and
+    /// S-Gamut3/S-Log3" from Sony.
     pub const S_GAMUT: Chromaticities = Chromaticities {
-        r: (0.73000, 0.28000),
-        g: (0.14000, 0.85500),
-        b: (0.10000, -0.05000),
-        w: (0.31270, 0.32900),
+        r: (0.7300, 0.2800),
+        g: (0.1400, 0.8550),
+        b: (0.1000, -0.0500),
+        w: (0.3127, 0.3290),
     };
 
     /// Sony S-Gamut3.Cine chromaticities.
@@ -106,10 +122,10 @@ pub mod sony {
     /// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
     /// and S-Gamut3/S-Log3" from Sony.
     pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
-        r: (0.76600, 0.27500),
-        g: (0.22500, 0.80000),
-        b: (0.08900, -0.08700),
-        w: (0.31270, 0.32900),
+        r: (0.7660, 0.2750),
+        g: (0.2250, 0.8000),
+        b: (0.0890, -0.0870),
+        w: (0.3127, 0.3290),
     };
 }
 
