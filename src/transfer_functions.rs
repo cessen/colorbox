@@ -252,6 +252,88 @@ pub mod hlg {
     }
 }
 
+/// Panasonic's V-Log.
+///
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
+pub mod panasonic_vlog {
+    /// The normalized code value of scene-linear 0.0.
+    pub const CV_BLACK: f32 = 0.125;
+
+    /// The scene-linear value of normalized code value 0.0.
+    pub const LINEAR_MIN: f32 = -0.02232143;
+
+    /// The scene-linear value of normalized code value 1.0.
+    pub const LINEAR_MAX: f32 = 46.085537;
+
+    /// Misc internal constants used on the S-Log formulas.
+    const CUT_1: f32 = 0.01;
+    const CUT_2: f32 = 0.181;
+    const B: f32 = 0.00873;
+    const C: f32 = 0.241514;
+    const D: f32 = 0.598206;
+
+    /// From scene linear to (normalized) code values.
+    ///
+    /// For example, to get 10-bit code values do
+    /// `from_linear(scene_linear_in) * 1023.0`
+    #[inline]
+    pub fn from_linear(x: f32) -> f32 {
+        if x < CUT_1 {
+            5.6 * x + 0.125
+        } else {
+            C * (x + B).log10() + D
+        }
+    }
+
+    /// From (normalized) code values to scene linear.
+    ///
+    /// For example, if using 10-bit code values do
+    /// `to_linear(10_bit_cv_in / 1023.0)`
+    #[inline]
+    pub fn to_linear(x: f32) -> f32 {
+        if x < CUT_2 {
+            (x - 0.125) / 5.6
+        } else {
+            10.0f32.powf((x - D) / C) - B
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn from_linear_test() {
+            // Invariants from page 3 of "V-Log/V-Gamut Reference Manual"
+            // from Panasonic, November 28th 2014.
+            assert!((from_linear(0.0) - (128.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.18) - (433.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.9) - (602.0 / 1023.0)).abs() < 0.001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            // Invariants from page 3 of "V-Log/V-Gamut Reference Manual"
+            // from Panasonic, November 28th 2014.
+            assert!((to_linear(128.0 / 1023.0) - 0.0).abs() < 0.001);
+            assert!((to_linear(433.0 / 1023.0) - 0.18).abs() < 0.001);
+            assert!((to_linear(602.0 / 1023.0) - 0.9).abs() < 0.03);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_03);
+            }
+        }
+    }
+}
+
 /// Sony's S-Log (original).
 ///
 /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
