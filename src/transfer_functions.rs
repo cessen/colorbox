@@ -252,6 +252,92 @@ pub mod hlg {
     }
 }
 
+/// Fujifilm's F-Log.
+///
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
+pub mod fujifilm_flog {
+    /// The normalized code value of scene-linear 0.0.
+    pub const CV_BLACK: f32 = 0.092864;
+
+    /// The scene-linear value of normalized code value 0.0.
+    pub const LINEAR_MIN: f32 = -0.010630486;
+
+    /// The scene-linear value of normalized code value 1.0.
+    pub const LINEAR_MAX: f32 = 7.281325;
+
+    const CUT_1: f32 = 0.00089;
+    const CUT_2: f32 = 0.100_537_775_223_865;
+    const A: f32 = 0.555556;
+    const B: f32 = 0.009468;
+    const C: f32 = 0.344676;
+    const D: f32 = 0.790453;
+    const E: f32 = 8.735631;
+    const F: f32 = 0.092864;
+
+    /// From scene linear to (normalized) code values.
+    ///
+    /// For example, to get 10-bit code values do
+    /// `from_linear(scene_linear_in) * 1023.0`
+    #[inline]
+    pub fn from_linear(x: f32) -> f32 {
+        if x < CUT_1 {
+            E * x + F
+        } else {
+            C * (A * x + B).log10() + D
+        }
+    }
+
+    /// From (normalized) code values to scene linear.
+    ///
+    /// For example, if using 10-bit code values do
+    /// `to_linear(10_bit_cv_in / 1023.0)`
+    #[inline]
+    pub fn to_linear(x: f32) -> f32 {
+        if x < CUT_2 {
+            (x - F) / E
+        } else {
+            (10.0f32.powf((x - D) / C) - B) / A
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn from_linear_test() {
+            // Invariants from page 2 of "F-Log Data Sheet Ver. 1.0"
+            // from Fujifilm.
+            assert!((from_linear(0.0) - (95.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.18) - (470.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.9) - (705.0 / 1023.0)).abs() < 0.001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            // Invariants from page 2 of "F-Log Data Sheet Ver. 1.0"
+            // from Fujifilm.
+            assert!((to_linear(95.0 / 1023.0) - 0.0).abs() < 0.001);
+            assert!((to_linear(470.0 / 1023.0) - 0.18).abs() < 0.001);
+            assert!((to_linear(705.0 / 1023.0) - 0.9).abs() < 0.03);
+
+            assert_eq!(to_linear(1.0), 0.0);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                assert!((n - to_linear(from_linear(n))).abs() < 0.000_04);
+            }
+        }
+    }
+}
+
 /// Panasonic's V-Log.
 ///
 /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
@@ -269,7 +355,6 @@ pub mod panasonic_vlog {
     /// The scene-linear value of normalized code value 1.0.
     pub const LINEAR_MAX: f32 = 46.085537;
 
-    /// Misc internal constants used on the S-Log formulas.
     const CUT_1: f32 = 0.01;
     const CUT_2: f32 = 0.181;
     const B: f32 = 0.00873;
@@ -354,7 +439,6 @@ pub mod sony_slog1 {
     /// The scene-linear value of normalized code value 1.0.
     pub const LINEAR_MAX: f32 = 9.737593;
 
-    /// Misc internal constants used on the S-Log formulas.
     const A: f32 = 0.432699;
     const B: f32 = 0.037584;
     const C: f32 = 0.616596;
