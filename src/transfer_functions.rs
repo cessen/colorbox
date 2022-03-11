@@ -420,6 +420,138 @@ pub mod fujifilm_flog {
     }
 }
 
+/// Nikon's N-Log.
+///
+/// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
+/// mapping.  It is a transfer function between "scene linear" and
+/// normalized "code values".  For example, scene-linear 0.0
+/// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
+/// 1.0 maps to a much greater than 1.0 scene linear value.
+pub mod nikon_nlog {
+    /// The normalized code value of scene-linear 0.0.
+    pub const CV_BLACK: f32 = 0.12437262;
+
+    /// The scene-linear value of normalized code value 0.0.
+    pub const LINEAR_MIN: f32 = -0.0075;
+
+    /// The scene-linear value of normalized code value 1.0.
+    pub const LINEAR_MAX: f32 = 14.780865;
+
+    // The `CUT_1` and `CUT_2` constants are slightly different
+    // than in the Nikon white paper, because the official constants
+    // are only precise enough to connect the piece-wise curves in
+    // 10-bit color.  These constants are much higher precision, and
+    // were derived to connect the piece-wise curves properly even
+    // in much higher precision color.
+    const CUT_1: f32 = 0.316731;
+    const CUT_2: f32 = 0.436505;
+    const A: f32 = 650.0 / 1023.0;
+    const B: f32 = 0.0075;
+    const C: f32 = 150.0 / 1023.0;
+    const D: f32 = 619.0 / 1023.0;
+
+    /// From scene linear to (normalized) code values.
+    ///
+    /// For example, to get 10-bit code values do
+    /// `from_linear(scene_linear_in) * 1023.0`
+    #[inline]
+    pub fn from_linear(x: f32) -> f32 {
+        if x < CUT_1 {
+            A * (x + B).powf(1.0 / 3.0)
+        } else {
+            C * x.ln() + D
+        }
+    }
+
+    /// From (normalized) code values to scene linear.
+    ///
+    /// For example, if using 10-bit code values do
+    /// `to_linear(10_bit_cv_in / 1023.0)`
+    #[inline]
+    pub fn to_linear(x: f32) -> f32 {
+        if x < CUT_2 {
+            let tmp = x / A;
+            tmp * tmp * tmp - B
+        } else {
+            ((x - D) / C).exp()
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        // The Nikon white paper specifies the formula in terms of
+        // 10-bit code values.  These are a straight implementation
+        // of their exact formulas to verify against.
+        fn from_linear_10bit(x: f32) -> f32 {
+            if x < 0.328 {
+                650.0 * (x + 0.0075).powf(1.0 / 3.0)
+            } else {
+                150.0 * x.ln() + 619.0
+            }
+        }
+        fn to_linear_10bit(x: f32) -> f32 {
+            if x < 452.0 {
+                let tmp = x / 650.0;
+                tmp * tmp * tmp - 0.0075
+            } else {
+                ((x - 619.0) / 150.0).exp()
+            }
+        }
+
+        // Make sure it matches the official formulas after
+        // normalization.
+        #[test]
+        fn matches_10_bit() {
+            for i in 0..1024 {
+                let n = i as f32;
+
+                let l1 = to_linear(n / 1023.0);
+                let l2 = to_linear_10bit(n);
+                assert!((1.0 - (l1 / l2)).abs() < 0.001);
+
+                let cv1 = from_linear(l1);
+                let cv2 = from_linear_10bit(l1);
+                assert!((cv1 - (cv2 / 1023.0)).abs() < 0.001);
+            }
+        }
+
+        #[test]
+        fn from_linear_test() {
+            // The paper "N-Log Specification Document" version 1.0.0 (by
+            // Nikon, September 1st, 2018) does not provide any tables of
+            // known inputs/outputs to verify against.  So instead these
+            // test cases were built by making sure they roughly matched
+            // the visual graph on page 4 of the document.
+            assert!((from_linear(0.0) - (128.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.18) - (372.0 / 1023.0)).abs() < 0.001);
+            assert!((from_linear(0.9) - (603.0 / 1023.0)).abs() < 0.001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            // The paper "N-Log Specification Document" version 1.0.0 (by
+            // Nikon, September 1st, 2018) does not provide any tables of
+            // known inputs/outputs to verify against.  So instead these
+            // test cases were built by making sure they roughly matched
+            // the visual graph on page 4 of the document.
+            assert!((to_linear(128.0 / 1023.0) - 0.0).abs() < 0.001);
+            assert!((to_linear(372.0 / 1023.0) - 0.18).abs() < 0.001);
+            assert!((to_linear(603.0 / 1023.0) - 0.9).abs() < 0.002);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                let n2 = from_linear(to_linear(n));
+                assert!((n - n2).abs() < 0.000_01);
+            }
+        }
+    }
+}
+
 /// Panasonic's V-Log.
 ///
 /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
