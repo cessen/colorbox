@@ -254,6 +254,18 @@ pub mod hlg {
 
 /// DJI's D-Log.
 ///
+/// Note that according to the D-Log white paper:
+///
+/// > For EI above 1600, the output code value will be beyond saturation
+/// > level if calculated by the linear-log conversion function, thus an
+/// > s-shape function is applied to keep output code value in valid
+/// > range.
+///
+/// The s-curve used and the precise way in which it is applied are
+/// undocumented, and therefore no attempt is made in this code to
+/// account for it.  The functions in this module just implement vanilla
+/// D-Log.
+///
 /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
 /// mapping.  It is a transfer function between "scene linear" and
 /// normalized "code values".  For example, scene-linear 0.0
