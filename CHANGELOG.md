@@ -27,5 +27,5 @@
 - A collection of common transfer functions.
 
 
-[Unreleased]: https://github.com/cessen/kioku/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/cessen/kioku/releases/tag/v0.1.0
+[Unreleased]: https://github.com/cessen/colorbox/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/cessen/colorbox/releases/tag/v0.1.0
