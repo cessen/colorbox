@@ -82,6 +82,38 @@ impl Lut1D {
             panic!("Lut1D range count must either be 1 or match the table count.");
         }
     }
+
+    /// Resample the LUT such that all channels have the same input range.
+    ///
+    /// The input range of the new LUT will be the union of all the ranges
+    /// of the old one.
+    pub fn resample_to_single_range(&self, samples: usize) -> Lut1D {
+        if self.ranges.len() == 1 && self.tables.iter().all(|t| t.len() == samples) {
+            self.clone()
+        } else {
+            let range = self
+                .ranges
+                .iter()
+                .fold((std::f32::INFINITY, -std::f32::INFINITY), |a, b| {
+                    (a.0.min(b.0), a.1.max(b.1))
+                });
+            let tables: Vec<Vec<f32>> = (0..self.tables.len())
+                .map(|i| {
+                    resample(
+                        samples,
+                        range,
+                        &self.tables[i],
+                        *self.ranges.get(i).unwrap_or(&self.ranges[0]),
+                    )
+                })
+                .collect();
+
+            Lut1D {
+                ranges: vec![range],
+                tables: tables,
+            }
+        }
+    }
 }
 
 /// A 3D lookup table.
@@ -118,20 +150,40 @@ impl Default for Lut3D {
 /// Helper function for resampling 1D LUTs.
 ///
 /// - `new_samples` is the sample count of the new table.
-/// - `sample_range` is the range of the old table to sample.
-/// - `old_table` is the table to resample, treated as a 1D table with
-///   an input range of [0.0, 1.0].
-pub fn resample(new_samples: usize, sample_range: (f32, f32), old_table: &[f32]) -> Vec<f32> {
+/// - `new_range_x` is the input range of the new table.
+/// - `old_table` is the old table to resample.
+/// - `old_range_x` is the input range of the old table.
+///
+/// New samples outside of the old range will be given the first/last
+/// value of the old table.
+pub fn resample(
+    new_samples: usize,
+    new_range_x: (f32, f32),
+    old_table: &[f32],
+    old_range_x: (f32, f32),
+) -> Vec<f32> {
     let mut new_table = Vec::new();
+
+    let offset = (new_range_x.0 - old_range_x.0) / (old_range_x.1 - old_range_x.0);
+    let norm = (new_range_x.1 - new_range_x.0) / (old_range_x.1 - old_range_x.0);
 
     for i in 0..new_samples {
         let x = i as f32 / (new_samples - 1) as f32;
-        let x = sample_range.0 + (x * (sample_range.1 - sample_range.0));
+
+        // Map from new range to old range.  This is the same as:
+        // ```
+        // let x = ((x * (new_range_x.1 - new_range_x.0)) + new_range_x.0 - old_range_x.0)
+        //     / (old_range_x.1 - old_range_x.0);
+        // ```
+        // Just optimized with precomputed constants.
+        let x = offset + (x * norm);
 
         let y = if x <= 0.0 {
-            // Off the end.
             old_table[0]
+        } else if x >= 1.0 {
+            *old_table.last().unwrap()
         } else {
+            // TODO: conform to the new range.
             let j = x * (old_table.len() - 1) as f32;
             let j1 = j as usize;
             let j2 = j1 + 1;
@@ -234,7 +286,7 @@ mod tests {
     fn resample_01() {
         let lut1 = vec![0.0, 0.25, 1.0];
 
-        let lut2 = resample(5, (0.0, 1.0), &lut1);
+        let lut2 = resample(5, (0.0, 1.0), &lut1, (0.0, 1.0));
 
         assert_eq!(&lut2, &[0.0, 0.125, 0.25, 0.625, 1.0]);
     }
@@ -243,7 +295,7 @@ mod tests {
     fn resample_02() {
         let lut1 = vec![0.0, 1.0];
 
-        let lut2 = resample(2, (0.25, 0.75), &lut1);
+        let lut2 = resample(2, (0.25, 0.75), &lut1, (0.0, 1.0));
 
         assert_eq!(&lut2, &[0.25, 0.75]);
     }
@@ -252,9 +304,45 @@ mod tests {
     fn resample_03() {
         let lut1 = vec![0.0, 1.0];
 
-        let lut2 = resample(3, (-0.25, 1.25), &lut1);
+        let lut2 = resample(3, (-0.25, 1.25), &lut1, (0.0, 1.0));
 
         assert_eq!(&lut2, &[0.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn resample_04() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(3, (0.25, 1.25), &lut1, (0.25, 1.25));
+
+        assert_eq!(&lut2, &[0.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn resample_05() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(3, (-0.25, 0.75), &lut1, (0.25, 1.25));
+
+        assert_eq!(&lut2, &[0.0, 0.0, 0.5]);
+    }
+
+    #[test]
+    fn resample_06() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(5, (-0.5, 1.5), &lut1, (0.5, 1.5));
+
+        assert_eq!(&lut2, &[0.0, 0.0, 0.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn resample_07() {
+        let lut1 = vec![0.0, 1.0];
+
+        let lut2 = resample(5, (0.5, 1.5), &lut1, (-0.5, 1.5));
+
+        assert_eq!(&lut2, &[0.5, 0.625, 0.75, 0.875, 1.0]);
     }
 
     #[test]
