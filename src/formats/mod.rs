@@ -1,6 +1,7 @@
 //! Functions for reading and writing various file formats.
 
-pub mod cube;
+pub mod cube_iridas;
+pub mod cube_resolve;
 pub mod spi1d;
 
 fn filter_non_finite(n: f32) -> f32 {
