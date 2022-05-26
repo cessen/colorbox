@@ -8,44 +8,93 @@
 //! just one or the other.  But it is less flexible in that the 1D LUTs
 //! have a shared rather than individual input range for each channel.
 
+// Implemented according to:
+// https://web.archive.org/web/20201125231728/https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=40284
+
 use std::io::{BufRead, Write};
 
 use super::filter_non_finite;
 use crate::lut::{Lut1D, Lut3D};
 
-/// Writes a 1D .cube file.
-pub fn write_1d<W: Write>(
+/// Writes a .cube file.
+///
+/// Can contain either a 1D LUT, a 3D LUT, or both.  But must have at
+/// least one of the two.
+///
+/// - `lut_1d`: (range_min, range_max, tables [r, g, b])
+/// - `lut_3d`: (range_min, range_max, resolution, tables [r, g, b]).
+///             The tables should have indices ordered the same as the
+///             `Lut3D` type.
+pub fn write<W: Write>(
     mut writer: W,
-    range: (f32, f32),
-    tables: [&[f32]; 3],
+    lut_1d: Option<(f32, f32, [&[f32]; 3])>,
+    lut_3d: Option<(f32, f32, usize, [&[f32]; 3])>,
 ) -> std::io::Result<()> {
-    assert!(tables[0].len() == tables[1].len() && tables[1].len() == tables[2].len());
+    assert!(!(lut_1d.is_none() && lut_3d.is_none()));
 
-    writer.write_all(format!("LUT_1D_SIZE {}\n", tables[0].len()).as_bytes())?;
-    writer.write_all(
-        format!(
-            "LUT_1D_INPUT_RANGE {:0.7} {:0.7}\n",
-            filter_non_finite(range.0),
-            filter_non_finite(range.1),
-        )
-        .as_bytes(),
-    )?;
-
-    for ((r, g), b) in tables[0]
-        .iter()
-        .copied()
-        .zip(tables[1].iter().copied())
-        .zip(tables[2].iter().copied())
-    {
+    // Write header and do basic sanity checks.
+    if let Some((range_min, range_max, tables)) = lut_1d {
+        assert!(tables[0].len() == tables[1].len() && tables[1].len() == tables[2].len());
+        writer.write_all(format!("LUT_1D_SIZE {}\n", tables[0].len()).as_bytes())?;
         writer.write_all(
             format!(
-                "{:0.7} {:0.7} {:0.7}\n",
-                filter_non_finite(r),
-                filter_non_finite(g),
-                filter_non_finite(b),
+                "LUT_1D_INPUT_RANGE {:0.7} {:0.7}\n",
+                filter_non_finite(range_min),
+                filter_non_finite(range_max),
             )
             .as_bytes(),
         )?;
+    }
+    if let Some((range_min, range_max, res, tables)) = lut_3d {
+        assert!(tables[0].len() == (res * res * res));
+        assert!(tables[0].len() == tables[1].len() && tables[1].len() == tables[2].len());
+        writer.write_all(format!("LUT_3D_SIZE {}\n", res).as_bytes())?;
+        writer.write_all(
+            format!(
+                "LUT_3D_INPUT_RANGE {:0.7} {:0.7}\n",
+                filter_non_finite(range_min),
+                filter_non_finite(range_max),
+            )
+            .as_bytes(),
+        )?;
+    }
+
+    // Write LUT data.
+    if let Some((_, _, tables)) = lut_1d {
+        for ((r, g), b) in tables[0]
+            .iter()
+            .copied()
+            .zip(tables[1].iter().copied())
+            .zip(tables[2].iter().copied())
+        {
+            writer.write_all(
+                format!(
+                    "{:0.7} {:0.7} {:0.7}\n",
+                    filter_non_finite(r),
+                    filter_non_finite(g),
+                    filter_non_finite(b),
+                )
+                .as_bytes(),
+            )?;
+        }
+    }
+    if let Some((_, _, _, tables)) = lut_3d {
+        for ((r, g), b) in tables[0]
+            .iter()
+            .copied()
+            .zip(tables[1].iter().copied())
+            .zip(tables[2].iter().copied())
+        {
+            writer.write_all(
+                format!(
+                    "{:0.7} {:0.7} {:0.7}\n",
+                    filter_non_finite(r),
+                    filter_non_finite(g),
+                    filter_non_finite(b),
+                )
+                .as_bytes(),
+            )?;
+        }
     }
 
     Ok(())
