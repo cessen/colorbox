@@ -4,6 +4,18 @@
 ## [Unreleased]
 
 
+## [0.3.0] - 2022-05-26
+
+### Additions
+
+- Transfer functions: Panasonic V-Log, Fujifilm F-Log, DJI D-Log, Nikon N-Log.
+- Color space chromatcity coordinates: Blackmagic Design's various spaces, Panasonic V-Gamut, DJI D-Gamut.
+- Tables of the Stockman & Sharpe 10-degree cone fundamentals.
+- Misc. helper funtions for working with 1D LUTs.
+- Support for Davinci Resolve's custom .cube format variant.
+- Support for the 3D variant of the original Iridas .cube format.
+
+
 ## [0.2.0] - 2021-12-13
 
 ### Additions
@@ -27,5 +39,7 @@
 - A collection of common transfer functions.
 
 
-[Unreleased]: https://github.com/cessen/colorbox/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cessen/colorbox/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/cessen/colorbox/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/cessen/colorbox/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cessen/colorbox/releases/tag/v0.1.0
