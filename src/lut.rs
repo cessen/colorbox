@@ -114,6 +114,96 @@ impl Lut1D {
             }
         }
     }
+
+    /// Convenience function for doing a single-channel, linearly interpolated lookup.
+    ///
+    /// Note: this is a convenience function, and is not intended for high-performance
+    /// situations.
+    pub fn look_up(&self, n: f32, channel: usize) -> f32 {
+        assert!(channel < self.tables.len());
+        assert!(self.ranges.len() == 1 || self.ranges.len() == self.tables.len());
+
+        let table = &self.tables[channel];
+        let range = if self.ranges.len() == 1 {
+            self.ranges[0]
+        } else {
+            self.ranges[channel]
+        };
+
+        let t = ((n - range.0) / (range.1 - range.0)).clamp(0.0, 1.0);
+
+        let i1 = ((table.len() - 1) as f32 * t) as usize;
+        let alpha = ((table.len() - 1) as f32 * t) - i1 as f32;
+
+        if i1 == (table.len() - 1) {
+            *table.last().unwrap()
+        } else {
+            let v1 = table[i1];
+            let v2 = table[i1 + 1];
+            v1 + ((v2 - v1) * alpha)
+        }
+    }
+
+    /// Does the inverse of `look_up()`.
+    ///
+    /// In other words, `n == lut.lookup_inv(lut.look_up(n, 0), 0)`.
+    ///
+    /// This assumes that the LUT is monotonically increasing.
+    ///
+    /// Note: this is a convenience function, and is not intended for high-performance
+    /// situations.
+    pub fn look_up_inv(&self, n: f32, channel: usize) -> f32 {
+        assert!(channel < self.tables.len());
+        assert!(self.ranges.len() == 1 || self.ranges.len() == self.tables.len());
+
+        let table = &self.tables[channel];
+        let range = if self.ranges.len() == 1 {
+            self.ranges[0]
+        } else {
+            self.ranges[channel]
+        };
+
+        let (i1, i2) = match table.binary_search_by(|v| v.partial_cmp(&n).unwrap()) {
+            Ok(i) => (i - 1, i),
+            Err(i) => {
+                if i == 0 {
+                    (i, i + 1)
+                } else {
+                    (i - 1, i)
+                }
+            }
+        };
+
+        let out_1 = i1 as f32 / (table.len() - 1) as f32;
+        let out_2 = i2 as f32 / (table.len() - 1) as f32;
+
+        let alpha = if table[i1] == table[i2] {
+            return (out_1 + out_2) * 0.5;
+        } else {
+            (n - table[i1]) / (table[i2] - table[i1])
+        };
+
+        let t = out_1 + ((out_2 - out_1) * alpha);
+
+        (t * (range.1 - range.0)) + range.0
+    }
+
+    /// Checks whether the LUT is monotonically increasing or not.
+    ///
+    /// Note: this has nothing to do with monotone color.
+    pub fn is_monotonic(&self) -> bool {
+        for table in self.tables.iter() {
+            let mut n = table[0];
+            for v in table.iter() {
+                if *v < n {
+                    return false;
+                }
+                n = *v;
+            }
+        }
+
+        true
+    }
 }
 
 /// A 3D lookup table.
