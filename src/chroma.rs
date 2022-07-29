@@ -156,9 +156,33 @@ pub mod blackmagic {
 
     /// BMD Wide Gamut Gen4/Gen5.
     pub const BMD_WIDE_GAMUT_GEN4: Chromaticities = Chromaticities {
-        r: (0.7177, 0.3171),
-        g: (0.2280, 0.8616),
-        b: (0.1006, -0.0820),
+        r: (0.7177215, 0.3171181),
+        g: (0.2280410, 0.8615690),
+        b: (0.1005841, -0.0820452),
+        w: (0.3127170, 0.3290312),
+    };
+
+    /// BMD 4k Film Gen1.
+    pub const BMD_4K_FILM_GEN1: Chromaticities = Chromaticities {
+        r: (0.7422, 0.2859),
+        g: (0.4140, 1.3035),
+        b: (0.0342, -0.0833),
+        w: (0.3135, 0.3305),
+    };
+
+    /// BMD 4k Film Gen3.
+    pub const BMD_4K_FILM_GEN3: Chromaticities = Chromaticities {
+        r: (1.0625, 0.3948),
+        g: (0.3689, 0.7775),
+        b: (0.0956, 0.0332),
+        w: (0.3135, 0.3305),
+    };
+
+    /// BMD 4.6k Film Gen1.
+    pub const BMD_4_6K_FILM_GEN1: Chromaticities = Chromaticities {
+        r: (0.9175, 0.2983),
+        g: (0.2982, 1.2835),
+        b: (0.0756, -0.0860),
         w: (0.3127, 0.3290),
     };
 
@@ -170,35 +194,35 @@ pub mod blackmagic {
         w: (0.3127, 0.3290),
     };
 
-    /// BMD 4.6k Film Gen1.
-    pub const BMD_4_6K_FILM_GEN1: Chromaticities = Chromaticities {
-        r: (0.9175, 0.2983),
-        g: (0.2982, 1.2835),
-        b: (0.0756, -0.0860),
-        w: (0.3127, 0.3290),
-    };
-
-    /// BMD 4k Film Gen3.
-    pub const BMD_4K_FILM_GEN3: Chromaticities = Chromaticities {
-        r: (1.0625, 0.3948),
-        g: (0.3689, 0.7775),
-        b: (0.0956, 0.0332),
-        w: (0.3135, 0.3305),
-    };
-
-    /// BMD 4k Film Gen1.
-    pub const BMD_4K_FILM_GEN1: Chromaticities = Chromaticities {
-        r: (0.7422, 0.2859),
-        g: (0.4140, 1.3035),
-        b: (0.0342, -0.0833),
-        w: (0.3135, 0.3305),
-    };
-
     /// BMD Film Gen1.
     pub const BMD_FILM_GEN1: Chromaticities = Chromaticities {
         r: (0.9173, 0.2502),
         g: (0.2833, 1.7072),
         b: (0.0856, -0.0708),
         w: (0.3135, 0.3305),
+    };
+
+    /// BMD Pocket 4K Film Gen 4.
+    pub const BMD_POCKET_4K_FILM_GEN4: Chromaticities = Chromaticities {
+        r: (0.717722, 0.317118),
+        g: (0.228041, 0.861569),
+        b: (0.100584, -0.082045),
+        w: (0.3127, 0.3290),
+    };
+
+    /// BMD Video Gen 4.
+    pub const BMD_VIDEO_GEN4: Chromaticities = Chromaticities {
+        r: (0.682777, 0.318592),
+        g: (0.237613, 0.813547),
+        b: (0.121743, -0.044283),
+        w: (0.3127, 0.3290),
+    };
+
+    /// BMD Video Gen 5.
+    pub const BMD_VIDEO_GEN5: Chromaticities = Chromaticities {
+        r: (0.640000, 0.330000),
+        g: (0.300000, 0.600000),
+        b: (0.150000, 0.060000),
+        w: (0.3127, 0.3290),
     };
 }
