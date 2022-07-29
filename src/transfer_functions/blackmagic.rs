@@ -1,16 +1,16 @@
 //! Blackmagic Design's transfer functions.
 //!
 //! Unfortunately, Blackmagic Design does not publish most of their
-//! transfer functions, so with the notable exception of "Film Generation 5"
-//! all the transfer functions in this model are reverse engineered, not
-//! official.  They are neverthless more than accurate enough for any
-//! practical purpose.  See the following page for details:
+//! transfer functions, so with the notable exceptions of "Film Generation 5"
+//! and "DaVinci Intermediate", all the transfer functions in this module are
+//! reverse engineered, not official.  They are neverthless more than accurate
+//! enough for any practical purpose.  See the following page for details:
 //!
 //! <https://psychopath.io/post/2022_04_23_blackmagic_design_color_spaces>
 //!
 //! That also means these are not all of Blackmagic Design's transfer
-//! functions, only the (single) one that they published and the
-//! remaining that have been reverse engineered so far.
+//! functions, only the two that they published and the remaining that
+//! have been reverse engineered so far.
 //!
 //! Note: none of the transfer functions in this module are
 //! [0.0, 1.0] -> [0.0, 1.0] mappings.  They are transfer functions between
@@ -188,6 +188,96 @@ pub mod film_gen5 {
             for i in 0..1024 {
                 let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
                 assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_001);
+            }
+        }
+    }
+}
+
+/// Blackmagic Design's "DaVinci Intermediate".
+pub mod davinci_intermediate {
+    /// The normalized code value of scene-linear 0.0.
+    pub const CV_BLACK: f32 = 0.0;
+
+    /// The scene-linear value of normalized code value 0.0.
+    pub const LINEAR_MIN: f32 = 0.0;
+
+    /// The scene-linear value of normalized code value 1.0.
+    pub const LINEAR_MAX: f32 = 100.00002;
+
+    const A: f32 = 0.0075;
+    const B: f32 = 7.0;
+    const C: f32 = 0.07329248;
+    const M: f32 = 10.44426855;
+    const LIN_CUT: f32 = 0.00262409;
+    const LOG_CUT: f32 = LIN_CUT * M;
+
+    /// From scene linear to (normalized) code values.
+    #[inline]
+    pub fn from_linear(x: f32) -> f32 {
+        if x < LIN_CUT {
+            x * M
+        } else {
+            ((x + A).log2() + B) * C
+        }
+    }
+
+    /// From (normalized) code values to scene linear.
+    #[inline]
+    pub fn to_linear(x: f32) -> f32 {
+        if x < LOG_CUT {
+            x / M
+        } else {
+            2.0f32.powf((x / C) - B) - A
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn constants() {
+            assert_eq!(from_linear(0.0), CV_BLACK);
+            assert_eq!(to_linear(0.0), LINEAR_MIN);
+            assert_eq!(to_linear(1.0), LINEAR_MAX);
+        }
+
+        #[test]
+        fn from_linear_test() {
+            // Invariants from page 4 of "Wide Gamut Intermediat - DaVinci Resolve 17"
+            // from Blackmagic Design, August 2021.
+            assert!((from_linear(-0.01) - -0.104443).abs() < 0.00001);
+            assert!((from_linear(0.0) - 0.0).abs() < 0.00001);
+            assert!((from_linear(0.18) - 0.336043).abs() < 0.00001);
+            assert!((from_linear(1.0) - 0.513837).abs() < 0.00001);
+            assert!((from_linear(10.0) - 0.756599).abs() < 0.00001);
+            assert!((from_linear(40.0) - 0.903125).abs() < 0.00001);
+            assert!((from_linear(100.0) - 1.0).abs() < 0.00001);
+        }
+
+        #[test]
+        fn to_linear_test() {
+            // Invariants from page 4 of "Wide Gamut Intermediat - DaVinci Resolve 17"
+            // from Blackmagic Design, August 2021.
+            assert!((to_linear(-0.104443) - -0.01).abs() < 0.00001);
+            assert!((to_linear(0.0) - 0.0).abs() < 0.00001);
+            assert!((to_linear(0.336043) - 0.18).abs() < 0.00001);
+            assert!((to_linear(0.513837) - 1.0).abs() < 0.00001);
+            assert!((to_linear(0.756599) - 10.0).abs() < 0.0001);
+            assert!((to_linear(0.903125) - 40.0).abs() < 0.001);
+            assert!((to_linear(1.0) - 100.0).abs() < 0.001);
+        }
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
+                if n == 0.0 {
+                    assert_eq!(to_linear(0.0), 0.0);
+                    assert_eq!(from_linear(0.0), 0.0);
+                } else {
+                    assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_001);
+                }
             }
         }
     }

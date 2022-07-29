@@ -225,4 +225,12 @@ pub mod blackmagic {
         b: (0.150000, 0.060000),
         w: (0.3127, 0.3290),
     };
+
+    /// DaVinci Wide Gamut BMD Video Gen 5.
+    pub const DAVINCI_WIDE_GAMUT: Chromaticities = Chromaticities {
+        r: (0.8000, 0.3130),
+        g: (0.1682, 0.9877),
+        b: (0.0790, -0.1155),
+        w: (0.3127, 0.3290),
+    };
 }
