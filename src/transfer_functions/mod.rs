@@ -96,7 +96,7 @@ pub mod rec709 {
         fn round_trip() {
             for i in 0..1024 {
                 let n = i as f32 / 1023.0;
-                assert!((n - to_linear(from_linear(n))).abs() < 0.000_001);
+                assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
             }
         }
     }
@@ -185,8 +185,7 @@ pub mod rec2100_pq {
         fn round_trip() {
             for i in 0..1024 {
                 let n = i as f32 / 1023.0;
-                dbg!(n);
-                assert!((n - to_linear(from_linear(n))).abs() < 0.000_1);
+                assert!((n - from_linear(to_linear(n))).abs() < 0.000_1);
             }
         }
     }
@@ -245,8 +244,186 @@ pub mod rec2100_hlg {
         fn round_trip() {
             for i in 0..1024 {
                 let n = i as f32 / 1023.0;
-                dbg!(n);
-                assert!((n - to_linear(from_linear(n))).abs() < 0.000_001);
+                assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
+            }
+        }
+    }
+}
+
+/// Arri's ALEXA Log C V3 transfer function family.
+///
+/// Unlike the other transfer functions in Colorbox, the ALEXA Log C
+/// transfer function is parameterized, representing a family of
+/// of transfer functions.  Specifically, they are parameterized by
+/// two things:
+///
+/// - `is_ev`: whether you're converting to/from exposure values (`true`)
+///   or raw sensor signal (`false`).  This will typically be `true`:
+///   since raw sensor signal data from ALEXA cameras is already linear,
+///   cases where you would want this to be `false` are pretty niche.
+/// - `exposure_index`: the exposure index (or "EI") the footage was shot
+///   with.  This information is included in the metadata of Arri ALEXA
+///   footage files.
+///
+/// Note: it's possible for footage to have an exposure index greater
+/// than 1600, which is the maximim that the functions in this module
+/// support.  Unfortunately, Arri does not document analytic transfer
+/// functions for exposure indices greater than 1600.  For such footage,
+/// Arri provides lookup tables for download.
+///
+/// For more details, see Arri's white paper "ALEXA LogC Curve - Usage in VFX".
+pub mod alexa_logc {
+    // /// The nonlinear value of scene-linear 0.0.
+    // pub const NONLINEAR_BLACK: f32 = 0.12512247;
+
+    // /// The scene-linear value of nonlinear value 0.0.
+    // pub const LINEAR_MIN: f32 = -0.087466866;
+
+    // /// The scene-linear value of nonlinear value 1.0.
+    // pub const LINEAR_MAX: f32 = 8.295911;
+
+    /// Exposure index.
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    pub enum EI {
+        Ei160,
+        Ei200,
+        Ei250,
+        Ei320,
+        Ei400,
+        Ei500,
+        Ei640,
+        Ei800,
+        Ei1000,
+        Ei1280,
+        Ei1600,
+    }
+
+    /// Linear -> Log.
+    pub fn from_linear(x: f32, is_ev: bool, exposure_index: EI) -> f32 {
+        let [cut, a, b, c, d, e, f] = if is_ev {
+            ei_ev(exposure_index)
+        } else {
+            ei_sensor(exposure_index)
+        };
+
+        if x < cut {
+            e * x + f
+        } else {
+            c * (a * x + b).log10() + d
+        }
+    }
+
+    /// Log -> Linear.
+    pub fn to_linear(x: f32, is_ev: bool, exposure_index: EI) -> f32 {
+        let [cut, a, b, c, d, e, f] = if is_ev {
+            ei_ev(exposure_index)
+        } else {
+            ei_sensor(exposure_index)
+        };
+
+        if x < (e * cut + f) {
+            (x - f) / e
+        } else {
+            (10.0f32.powf((x - d) / c) - b) / a
+        }
+    }
+
+    //---------------------------------------------------------
+
+    type EIValues = [f32; 7];
+
+    // Function parameters for converting between sensor signal and Log C, at various exposure indices.
+    fn ei_sensor(ei: EI) -> EIValues {
+        match ei {
+            EI::Ei160 => [
+                0.004680, 40.0, -0.076072, 0.269036, 0.381991, 42.062665, -0.071569,
+            ],
+            EI::Ei200 => [
+                0.004597, 50.0, -0.118740, 0.266007, 0.382478, 51.986387, -0.110339,
+            ],
+            EI::Ei250 => [
+                0.004518, 62.5, -0.171260, 0.262978, 0.382966, 64.243053, -0.158224,
+            ],
+            EI::Ei320 => [
+                0.004436, 80.0, -0.243808, 0.259627, 0.383508, 81.183335, -0.224409,
+            ],
+            EI::Ei400 => [
+                0.004369, 100.0, -0.325820, 0.256598, 0.383999, 100.295280, -0.299079,
+            ],
+            EI::Ei500 => [
+                0.004309, 125.0, -0.427461, 0.253569, 0.384493, 123.889239, -0.391261,
+            ],
+            EI::Ei640 => [
+                0.004249, 160.0, -0.568709, 0.250219, 0.385040, 156.482680, -0.518605,
+            ],
+            EI::Ei800 => [
+                0.004201, 200.0, -0.729169, 0.247190, 0.385537, 193.235573, -0.662201,
+            ],
+            EI::Ei1000 => [
+                0.004160, 250.0, -0.928805, 0.244161, 0.386036, 238.584745, -0.839385,
+            ],
+            EI::Ei1280 => [
+                0.004120, 320.0, -1.207168, 0.240810, 0.386590, 301.197380, -1.084020,
+            ],
+            EI::Ei1600 => [
+                0.004088, 400.0, -1.524256, 0.237781, 0.387093, 371.761171, -1.359723,
+            ],
+        }
+    }
+
+    // Function parameters for converting between exposure value and Log C, at various exposure indices.
+    fn ei_ev(ei: EI) -> EIValues {
+        match ei {
+            EI::Ei160 => [
+                0.005561, 5.555556, 0.080216, 0.269036, 0.381991, 5.842037, 0.092778,
+            ],
+            EI::Ei200 => [
+                0.006208, 5.555556, 0.076621, 0.266007, 0.382478, 5.776265, 0.092782,
+            ],
+            EI::Ei250 => [
+                0.006871, 5.555556, 0.072941, 0.262978, 0.382966, 5.710494, 0.092786,
+            ],
+            EI::Ei320 => [
+                0.007622, 5.555556, 0.068768, 0.259627, 0.383508, 5.637732, 0.092791,
+            ],
+            EI::Ei400 => [
+                0.008318, 5.555556, 0.064901, 0.256598, 0.383999, 5.571960, 0.092795,
+            ],
+            EI::Ei500 => [
+                0.009031, 5.555556, 0.060939, 0.253569, 0.384493, 5.506188, 0.092800,
+            ],
+            EI::Ei640 => [
+                0.009840, 5.555556, 0.056443, 0.250219, 0.385040, 5.433426, 0.092805,
+            ],
+            EI::Ei800 => [
+                0.010591, 5.555556, 0.052272, 0.247190, 0.385537, 5.367655, 0.092809,
+            ],
+            EI::Ei1000 => [
+                0.011361, 5.555556, 0.047996, 0.244161, 0.386036, 5.301883, 0.092814,
+            ],
+            EI::Ei1280 => [
+                0.012235, 5.555556, 0.043137, 0.240810, 0.386590, 5.229121, 0.092819,
+            ],
+            EI::Ei1600 => [
+                0.013047, 5.555556, 0.038625, 0.237781, 0.387093, 5.163350, 0.092824,
+            ],
+        }
+    }
+
+    //---------------------------------------------------------
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn round_trip() {
+            for i in 0..1024 {
+                let n = i as f32 / 1023.0;
+                assert!(
+                    (n - from_linear(to_linear(n, true, EI::Ei800), true, EI::Ei800)).abs()
+                        < 0.000_001
+                );
             }
         }
     }
@@ -300,6 +477,13 @@ pub mod canon {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 9 of "Canon Log Gamma Curves -
                 // Description of the Canon Log, Canon Log 2 and Canon Log 3
@@ -324,8 +508,8 @@ pub mod canon {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_01);
                 }
             }
         }
@@ -375,6 +559,13 @@ pub mod canon {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 9 of "Canon Log Gamma Curves -
                 // Description of the Canon Log, Canon Log 2 and Canon Log 3
@@ -403,8 +594,8 @@ pub mod canon {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_1);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_1);
                 }
             }
         }
@@ -464,6 +655,13 @@ pub mod canon {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 9 of "Canon Log Gamma Curves -
                 // Description of the Canon Log, Canon Log 2 and Canon Log 3
@@ -490,8 +688,8 @@ pub mod canon {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_01);
                 }
             }
         }
@@ -569,6 +767,13 @@ pub mod dji {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 3 of "White Paper on D-Log and
                 // D-Gamut" Revision 1.0, from DJI, September 29th, 2017.
@@ -589,8 +794,8 @@ pub mod dji {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_02);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -656,6 +861,13 @@ pub mod fujifilm {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 2 of "F-Log Data Sheet Ver. 1.0"
                 // from Fujifilm.
@@ -676,8 +888,8 @@ pub mod fujifilm {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_04);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -746,6 +958,13 @@ pub mod nikon {
         #[cfg(test)]
         mod tests {
             use super::*;
+
+            #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
 
             // The Nikon white paper specifies the formula in terms of
             // 10-bit code values.  These are a straight implementation
@@ -875,6 +1094,13 @@ pub mod panasonic {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 3 of "V-Log/V-Gamut Reference Manual"
                 // from Panasonic, November 28th 2014.
@@ -895,8 +1121,8 @@ pub mod panasonic {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_03);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -960,6 +1186,13 @@ pub mod red {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 5 of "White Paper on WedWideGamutRGB and Log3G10" from RED.
                 assert!((from_linear(-0.01) - 0.0).abs() < 0.00001);
@@ -982,8 +1215,8 @@ pub mod red {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_001);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -1053,6 +1286,13 @@ pub mod sony {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 6 of "S-Log White Paper 1.12.3" from
                 // Sony, October 23rd 2009.
@@ -1077,8 +1317,8 @@ pub mod sony {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -1153,6 +1393,13 @@ pub mod sony {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 6 of "S-Log2 Technical Paper v1.0" from
                 // Sony, June 6th 2012.
@@ -1173,8 +1420,8 @@ pub mod sony {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_01);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -1226,6 +1473,13 @@ pub mod sony {
             use super::*;
 
             #[test]
+            fn constants() {
+                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(to_linear(0.0), LINEAR_MIN);
+                assert_eq!(to_linear(1.0), LINEAR_MAX);
+            }
+
+            #[test]
             fn from_linear_test() {
                 // Invariants from page 6 of "Technical Summary for
                 // S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3", from Sony.
@@ -1246,8 +1500,8 @@ pub mod sony {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!((n - to_linear(from_linear(n))).abs() < 0.000_05);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }

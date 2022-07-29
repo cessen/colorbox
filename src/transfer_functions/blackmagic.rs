@@ -83,8 +83,8 @@ macro_rules! bmd_log_tf {
             #[test]
             fn round_trip() {
                 for i in 0..1024 {
-                    let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                    assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_01);
+                    let n = i as f32 / 1023.0;
+                    assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
                 }
             }
         }
@@ -158,6 +158,13 @@ pub mod film_gen5 {
         use super::*;
 
         #[test]
+        fn constants() {
+            assert_eq!(from_linear(0.0), CV_BLACK);
+            assert_eq!(to_linear(0.0), LINEAR_MIN);
+            assert_eq!(to_linear(1.0), LINEAR_MAX);
+        }
+
+        #[test]
         fn from_linear_test() {
             // Invariants from page 3 of "Blackmagic Generation 5 Color Science"
             // from Blackmagic Design, May 2021.
@@ -186,8 +193,8 @@ pub mod film_gen5 {
         #[test]
         fn round_trip() {
             for i in 0..1024 {
-                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_001);
+                let n = i as f32 / 1023.0;
+                assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
             }
         }
     }
@@ -271,13 +278,8 @@ pub mod davinci_intermediate {
         #[test]
         fn round_trip() {
             for i in 0..1024 {
-                let n = (i as f32 / 1023.0) * (LINEAR_MAX - LINEAR_MIN) + LINEAR_MIN;
-                if n == 0.0 {
-                    assert_eq!(to_linear(0.0), 0.0);
-                    assert_eq!(from_linear(0.0), 0.0);
-                } else {
-                    assert!(((n - to_linear(from_linear(n))).abs() / n.abs()) < 0.000_001);
-                }
+                let n = i as f32 / 1023.0;
+                assert!((n - from_linear(to_linear(n))).abs() < 0.000_001);
             }
         }
     }

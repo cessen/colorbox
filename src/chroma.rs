@@ -78,20 +78,20 @@ pub const ADOBE_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
     w: (0.3457, 0.3585),
 };
 
+/// Arri's ALEXA Wide Gamut RGB.
+pub const ALEXA_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
+    r: (0.6840, 0.3130),
+    g: (0.2210, 0.8480),
+    b: (0.0861, -0.1020),
+    w: (0.3127, 0.3290),
+};
+
 /// DJI D-Gamut chromaticities.
 pub const DJI_D_GAMUT: Chromaticities = Chromaticities {
     r: (0.7100, 0.3100),
     g: (0.2100, 0.8800),
     b: (0.0900, -0.0800),
     w: (0.3127, 0.3290),
-};
-
-/// Kodak ProPhoto RGB chromaticities.
-pub const PROPHOTO: Chromaticities = Chromaticities {
-    r: (0.734699, 0.265301),
-    g: (0.159597, 0.840403),
-    b: (0.036598, 0.000105),
-    w: (0.345704, 0.358540),
 };
 
 /// Panasonic V-Gamut chromaticities.
@@ -102,42 +102,12 @@ pub const PANASONIC_V_GAMUT: Chromaticities = Chromaticities {
     w: (0.3127, 0.3290),
 };
 
-/// Sony's color spaces.
-pub mod sony {
-    use super::*;
-    /// Sony S-Gamut/S-Gamut3 chromaticities.
-    ///
-    /// Yes, S-Gamut and S-Gamut3 have exactly the same chromaticities,
-    /// as per page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3 and
-    /// S-Gamut3/S-Log3" from Sony.
-    pub const S_GAMUT: Chromaticities = Chromaticities {
-        r: (0.7300, 0.2800),
-        g: (0.1400, 0.8550),
-        b: (0.1000, -0.0500),
-        w: (0.3127, 0.3290),
-    };
-
-    /// Sony S-Gamut3.Cine chromaticities.
-    ///
-    /// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
-    /// and S-Gamut3/S-Log3" from Sony.
-    pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
-        r: (0.7660, 0.2750),
-        g: (0.2250, 0.8000),
-        b: (0.0890, -0.0870),
-        w: (0.3127, 0.3290),
-    };
-}
-
-/// ALEXA Wide Gamut RGB.
-///
-/// From page 10 of "ALEXA Log C Curve - Usage in VFX" by
-/// Harald Brendei, from Arri, 2017-03-09.
-pub const ALEXA_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
-    r: (0.6840, 0.3130),
-    g: (0.2210, 0.8480),
-    b: (0.0861, -0.1020),
-    w: (0.3127, 0.3290),
+/// Kodak ProPhoto RGB chromaticities.
+pub const PROPHOTO: Chromaticities = Chromaticities {
+    r: (0.734699, 0.265301),
+    g: (0.159597, 0.840403),
+    b: (0.036598, 0.000105),
+    w: (0.345704, 0.358540),
 };
 
 /// RED Wide Gamut RGB.
@@ -231,6 +201,33 @@ pub mod blackmagic {
         r: (0.8000, 0.3130),
         g: (0.1682, 0.9877),
         b: (0.0790, -0.1155),
+        w: (0.3127, 0.3290),
+    };
+}
+
+/// Sony's color spaces.
+pub mod sony {
+    use super::*;
+    /// Sony S-Gamut/S-Gamut3 chromaticities.
+    ///
+    /// Yes, S-Gamut and S-Gamut3 have exactly the same chromaticities,
+    /// as per page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3 and
+    /// S-Gamut3/S-Log3" from Sony.
+    pub const S_GAMUT: Chromaticities = Chromaticities {
+        r: (0.7300, 0.2800),
+        g: (0.1400, 0.8550),
+        b: (0.1000, -0.0500),
+        w: (0.3127, 0.3290),
+    };
+
+    /// Sony S-Gamut3.Cine chromaticities.
+    ///
+    /// From page 7 of "Technical Summary for S-Gamut3.Cine/S-Log3
+    /// and S-Gamut3/S-Log3" from Sony.
+    pub const S_GAMUT3_CINE: Chromaticities = Chromaticities {
+        r: (0.7660, 0.2750),
+        g: (0.2250, 0.8000),
+        b: (0.0890, -0.0870),
         w: (0.3127, 0.3290),
     };
 }
