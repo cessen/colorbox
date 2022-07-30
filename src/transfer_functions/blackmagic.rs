@@ -13,10 +13,11 @@
 //! have been reverse engineered so far.
 //!
 //! Note: none of the transfer functions in this module are
-//! [0.0, 1.0] -> [0.0, 1.0] mappings.  They are transfer functions between
-//! "scene linear" and normalized "code values".  For example, scene-linear 0.0
-//! maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-//! 1.0 maps to a much greater than 1.0 scene linear value.
+//! [0.0, 1.0] -> [0.0, 1.0] mappings.  They are transfer functions
+//! between "scene linear" and a nonlinear [0.0, 1.0] range.  For
+//! example, scene-linear 0.0 maps to `NONLINEAR_BLACK` (which is > 0.0),
+//! and a nonlinear value of 1.0 maps to a much greater than 1.0 scene
+//! linear value.
 
 macro_rules! bmd_log_tf {
     (
@@ -26,18 +27,18 @@ macro_rules! bmd_log_tf {
         $d:literal,
         $e:literal,
         $lin_cut:literal,
-        $cv_black:literal,
+        $nonlinear_black:literal,
         $linear_min:literal,
         $linear_max:literal
         $(,)?
     ) => {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = $cv_black;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = $nonlinear_black;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = $linear_min;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = $linear_max;
 
         const A: f32 = $a;
@@ -49,7 +50,7 @@ macro_rules! bmd_log_tf {
         const LIN_CUT: f32 = $lin_cut;
         const LOG_CUT: f32 = LIN_CUT * A + B;
 
-        /// From scene linear to (normalized) code values.
+        /// Scene linear -> nonlinear.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             if x < LIN_CUT {
@@ -59,7 +60,7 @@ macro_rules! bmd_log_tf {
             }
         }
 
-        /// From (normalized) code values to scene linear.
+        /// Nonlinear -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < LOG_CUT {
@@ -75,7 +76,7 @@ macro_rules! bmd_log_tf {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -88,35 +89,35 @@ macro_rules! bmd_log_tf {
                 }
             }
         }
-    }
+    };
 }
 
 /// Blackmagic Design's "Film Generation 5".
 ///
 /// The Blackmagic Design whitepaper for this transfer function
-/// specifies both a "Film Generation 5" value and a "10-bit video
-/// levels" value, the latter of which uses broadcast legal ranges
-/// and the former of which doesn't.  That puts this implementation
-/// in a bit of a bind, because the normalized encoded values of
+/// specifies both "Film Generation 5" nonlinear values and
+/// "10-bit video levels" nonlinear values, the latter of which uses
+/// broadcast legal ranges and the former of which doesn't.  That puts
+/// this implementation in a bit of a bind, because the values of
 /// those two approaches are different.
 ///
 /// Since the "Film Generation 5" values are simpler in nature
 /// and directly reflect the functions given in the whitepaper,
 /// the functions within this module encode/decode for that.
 /// If you want encoded values with legal ranges, it's a linear
-/// mapping from the "Film Generation 5" values.  From Gen 5 to
+/// mapping from the "Film Generation 5" values.  From Film Gen 5 to
 /// 10-bit legal ranges:
 ///
 /// - `0.0924657534246575 -> 145`
 /// - `1.0 -> 940`
 pub mod film_gen5 {
-    /// The normalized code value of scene-linear 0.0.
-    pub const CV_BLACK: f32 = 0.09246575;
+    /// The nonlinear value of scene-linear 0.0.
+    pub const NONLINEAR_BLACK: f32 = 0.09246575;
 
-    /// The scene-linear value of normalized code value 0.0.
+    /// The scene-linear value of nonlinear value 0.0.
     pub const LINEAR_MIN: f32 = -0.011162501;
 
-    /// The scene-linear value of normalized code value 1.0.
+    /// The scene-linear value of nonlinear value 1.0.
     pub const LINEAR_MAX: f32 = 222.86098;
 
     const A: f32 = 8.283605932402494;
@@ -127,10 +128,7 @@ pub mod film_gen5 {
     const LIN_CUT: f32 = 0.005;
     const LOG_CUT: f32 = LIN_CUT * A + B;
 
-    /// From scene linear to (normalized) code values.
-    ///
-    /// For example, to get 10-bit code values do
-    /// `from_linear(scene_linear_in) * 1023.0`
+    /// Scene linear -> nonlinear.
     #[inline]
     pub fn from_linear(x: f32) -> f32 {
         if x < LIN_CUT {
@@ -140,10 +138,7 @@ pub mod film_gen5 {
         }
     }
 
-    /// From (normalized) code values to scene linear.
-    ///
-    /// For example, if using 10-bit code values do
-    /// `to_linear(10_bit_cv_in / 1023.0)`
+    /// Nonlinear -> scene linear.
     #[inline]
     pub fn to_linear(x: f32) -> f32 {
         if x < LOG_CUT {
@@ -159,7 +154,7 @@ pub mod film_gen5 {
 
         #[test]
         fn constants() {
-            assert_eq!(from_linear(0.0), CV_BLACK);
+            assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
             assert_eq!(to_linear(0.0), LINEAR_MIN);
             assert_eq!(to_linear(1.0), LINEAR_MAX);
         }
@@ -202,13 +197,13 @@ pub mod film_gen5 {
 
 /// Blackmagic Design's "DaVinci Intermediate".
 pub mod davinci_intermediate {
-    /// The normalized code value of scene-linear 0.0.
-    pub const CV_BLACK: f32 = 0.0;
+    /// The nonlinear value of scene-linear 0.0.
+    pub const NONLINEAR_BLACK: f32 = 0.0;
 
-    /// The scene-linear value of normalized code value 0.0.
+    /// The scene-linear value of nonlinear value 0.0.
     pub const LINEAR_MIN: f32 = 0.0;
 
-    /// The scene-linear value of normalized code value 1.0.
+    /// The scene-linear value of nonlinear value 1.0.
     pub const LINEAR_MAX: f32 = 100.00002;
 
     const A: f32 = 0.0075;
@@ -218,7 +213,7 @@ pub mod davinci_intermediate {
     const LIN_CUT: f32 = 0.00262409;
     const LOG_CUT: f32 = LIN_CUT * M;
 
-    /// From scene linear to (normalized) code values.
+    /// Scene linear -> nonlinear.
     #[inline]
     pub fn from_linear(x: f32) -> f32 {
         if x < LIN_CUT {
@@ -228,7 +223,7 @@ pub mod davinci_intermediate {
         }
     }
 
-    /// From (normalized) code values to scene linear.
+    /// Nonlinear -> scene linear.
     #[inline]
     pub fn to_linear(x: f32) -> f32 {
         if x < LOG_CUT {
@@ -244,7 +239,7 @@ pub mod davinci_intermediate {
 
         #[test]
         fn constants() {
-            assert_eq!(from_linear(0.0), CV_BLACK);
+            assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
             assert_eq!(to_linear(0.0), LINEAR_MIN);
             assert_eq!(to_linear(1.0), LINEAR_MAX);
         }

@@ -2,7 +2,7 @@
 
 /// sRGB gamma.
 pub mod srgb {
-    /// Linear -> sRGB
+    /// Linear -> sRGB.
     #[inline]
     pub fn from_linear(n: f32) -> f32 {
         if n < 0.003_130_8 {
@@ -12,7 +12,7 @@ pub mod srgb {
         }
     }
 
-    /// sRGB -> Linear
+    /// sRGB -> linear.
     #[inline]
     pub fn to_linear(n: f32) -> f32 {
         if n < 0.04045 {
@@ -56,7 +56,7 @@ pub mod rec709 {
     const B: f32 = 0.01805396851080;
     const C: f32 = A - 1.0;
 
-    /// Linear -> sRGB
+    /// Linear -> Rec.709 gamma.
     #[inline]
     pub fn from_linear(n: f32) -> f32 {
         if n < B {
@@ -66,7 +66,7 @@ pub mod rec709 {
         }
     }
 
-    /// sRGB -> Linear
+    /// Rec.709 gamma -> linear.
     #[inline]
     pub fn to_linear(n: f32) -> f32 {
         if n < (B * 4.5) {
@@ -141,7 +141,7 @@ pub mod rec2100_pq {
         }
     }
 
-    /// PQ -> Linear.
+    /// PQ -> linear.
     ///
     /// Input is in the range [0.0, 1.0].
     /// Output is in the range [0, `LUMINANCE_MAX`], representing display
@@ -210,7 +210,7 @@ pub mod rec2100_hlg {
         }
     }
 
-    /// HLG -> Linear.
+    /// HLG -> linear.
     ///
     /// Input and output are both [0.0, 1.0].
     #[inline]
@@ -298,7 +298,7 @@ pub mod alexa_logc {
         Ei1600,
     }
 
-    /// Linear -> Log.
+    /// Scene linear -> Log C.
     pub fn from_linear(x: f32, is_ev: bool, exposure_index: EI) -> f32 {
         let [cut, a, b, c, d, e, f] = if is_ev {
             ei_ev(exposure_index)
@@ -313,7 +313,7 @@ pub mod alexa_logc {
         }
     }
 
-    /// Log -> Linear.
+    /// Log C -> scene linear.
     pub fn to_linear(x: f32, is_ev: bool, exposure_index: EI) -> f32 {
         let [cut, a, b, c, d, e, f] = if is_ev {
             ei_ev(exposure_index)
@@ -454,7 +454,7 @@ pub mod canon {
         const B: f32 = 10.1596;
         const C: f32 = 0.12512248;
 
-        /// Linear -> Canon Log 2
+        /// Scene linear -> Canon Log.
         pub fn from_linear(x: f32) -> f32 {
             if x < 0.0 {
                 -A * (1.0 - (B * x)).log10() + C
@@ -463,7 +463,7 @@ pub mod canon {
             }
         }
 
-        /// Canon Log 2 -> Linear
+        /// Canon Log -> scene linear.
         pub fn to_linear(x: f32) -> f32 {
             if x < C {
                 -(10.0f32.powf((C - x) / A) - 1.0) / B
@@ -536,7 +536,7 @@ pub mod canon {
         const B: f32 = 87.099375;
         const C: f32 = 0.092864125;
 
-        /// Linear -> Canon Log 2
+        /// Scene linear -> Canon Log 2.
         pub fn from_linear(x: f32) -> f32 {
             if x < 0.0 {
                 -A * (1.0 - (B * x)).log10() + C
@@ -545,7 +545,7 @@ pub mod canon {
             }
         }
 
-        /// Canon Log 2 -> Linear
+        /// Canon Log 2 -> scene linear.
         pub fn to_linear(x: f32) -> f32 {
             if x < C {
                 -(10.0f32.powf((C - x) / A) - 1.0) / B
@@ -625,7 +625,7 @@ pub mod canon {
         const E: f32 = 0.12512219;
         const F: f32 = 0.12240537;
 
-        /// Linear -> Canon Log 3
+        /// Scene linear -> Canon Log 3.
         pub fn from_linear(x: f32) -> f32 {
             const BOUND: f32 = 0.014;
             if x < -BOUND {
@@ -637,7 +637,7 @@ pub mod canon {
             }
         }
 
-        /// Canon Log 3 -> Linear
+        /// Canon Log 3 -> scene linear.
         pub fn to_linear(x: f32) -> f32 {
             const BOUND1: f32 = 0.097465473;
             const BOUND2: f32 = 0.15277891;
@@ -713,18 +713,18 @@ pub mod dji {
     /// D-Log.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod dlog {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.0929;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.0929;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear 0.0.
         pub const LINEAR_MIN: f32 = -0.015419087;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 41.999413;
 
         const CUT_1: f32 = 0.0078;
@@ -736,10 +736,7 @@ pub mod dji {
         const E: f32 = 6.025;
         const F: f32 = 0.0929;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> D-Log.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             if x < CUT_1 {
@@ -749,10 +746,7 @@ pub mod dji {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// D-Log -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < CUT_2 {
@@ -768,7 +762,7 @@ pub mod dji {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -807,18 +801,18 @@ pub mod fujifilm {
     /// Fujifilm's F-Log.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod flog {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.092864;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.092864;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.010630486;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 7.281325;
 
         const CUT_1: f32 = 0.00089;
@@ -830,10 +824,7 @@ pub mod fujifilm {
         const E: f32 = 8.735631;
         const F: f32 = 0.092864;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> F-Log.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             if x < CUT_1 {
@@ -843,10 +834,7 @@ pub mod fujifilm {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// F-Log -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < CUT_2 {
@@ -862,7 +850,7 @@ pub mod fujifilm {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -901,18 +889,18 @@ pub mod nikon {
     /// Nikon's N-Log.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod nlog {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.12437262;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.12437262;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.0075;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 14.780865;
 
         // The `CUT_1` and `CUT_2` constants are slightly different
@@ -928,10 +916,7 @@ pub mod nikon {
         const C: f32 = 150.0 / 1023.0;
         const D: f32 = 619.0 / 1023.0;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> N-Log.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             if x < CUT_1 {
@@ -941,10 +926,7 @@ pub mod nikon {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// N-Log -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < CUT_2 {
@@ -961,7 +943,7 @@ pub mod nikon {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -1043,18 +1025,18 @@ pub mod panasonic {
     /// Panasonic's V-Log.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod vlog {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.125;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.125;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.02232143;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 46.085537;
 
         const CUT_1: f32 = 0.01;
@@ -1063,10 +1045,7 @@ pub mod panasonic {
         const C: f32 = 0.241514;
         const D: f32 = 0.598206;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> V-Log.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             if x < CUT_1 {
@@ -1076,10 +1055,7 @@ pub mod panasonic {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// V-Log -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < CUT_2 {
@@ -1095,7 +1071,7 @@ pub mod panasonic {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -1134,18 +1110,18 @@ pub mod red {
     /// RED's Log3G10.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod log3g10 {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.09155148;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.09155148;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.01;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 184.32233;
 
         const A: f32 = 0.224282;
@@ -1153,10 +1129,7 @@ pub mod red {
         const C: f32 = 0.01;
         const G: f32 = 15.1927;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> Log3G10.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             let x = x + C;
@@ -1168,10 +1141,7 @@ pub mod red {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// Log3G10 -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             if x < 0.0 {
@@ -1187,7 +1157,7 @@ pub mod red {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -1228,21 +1198,21 @@ pub mod sony {
     /// Sony's S-Log (original).
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod slog1 {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.088251315;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.088251315;
 
-        /// The normalized code value of camera sensor saturation.
-        pub const CV_SATURATION: f32 = SLOG_WHITE;
+        /// The nonlinear value of camera sensor saturation.
+        pub const NONLINEAR_SATURATION: f32 = SLOG_WHITE;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.014279289;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 9.737593;
 
         const A: f32 = 0.432699;
@@ -1251,10 +1221,7 @@ pub mod sony {
         const SLOG_BLACK: f32 = 64.0 / 1023.0;
         const SLOG_WHITE: f32 = 940.0 / 1023.0;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> S-Log.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             let x = x / 0.9;
@@ -1266,10 +1233,7 @@ pub mod sony {
             (y * (SLOG_WHITE - SLOG_BLACK)) + SLOG_BLACK
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// S-Log -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             // Map "code value" black and white levels to 0.0 and 1.0,
@@ -1287,7 +1251,7 @@ pub mod sony {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -1327,31 +1291,28 @@ pub mod sony {
     /// Sony's S-Log2.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod slog2 {
         /// Misc internal constants used on the S-Log2 formulas.
         const SLOG2_BLACK: f32 = 64.0 / 1023.0;
         const SLOG2_WHITE: f32 = 940.0 / 1023.0;
 
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.088251315;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.088251315;
 
-        /// The normalized code value of camera sensor saturation.
-        pub const CV_SATURATION: f32 = SLOG2_WHITE;
+        /// The nonlinear value of camera sensor saturation.
+        pub const NONLINEAR_SATURATION: f32 = SLOG2_WHITE;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.026210632;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 13.758276;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> S-Log2.
         #[inline]
         pub fn from_linear(x: f32) -> f32 {
             let x = x / 0.9;
@@ -1368,10 +1329,7 @@ pub mod sony {
             (y * (SLOG2_WHITE - SLOG2_BLACK)) + SLOG2_BLACK
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// S-Log2 -> scene linear.
         #[inline]
         pub fn to_linear(x: f32) -> f32 {
             // Map "code value" black and white levels to 0.0 and 1.0,
@@ -1394,7 +1352,7 @@ pub mod sony {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
@@ -1430,24 +1388,21 @@ pub mod sony {
     /// Sony's S-Log3.
     ///
     /// Note: this transfer function is not a [0.0, 1.0] -> [0.0, 1.0]
-    /// mapping.  It is a transfer function between "scene linear" and
-    /// normalized "code values".  For example, scene-linear 0.0
-    /// maps to `CV_BLACK` (which is > 0.0), and a normalized code value of
-    /// 1.0 maps to a much greater than 1.0 scene linear value.
+    /// mapping.  It is a transfer function between "scene linear" and a
+    /// nonlinear [0.0, 1.0] range.  For example, scene-linear 0.0 maps to
+    /// `NONLINEAR_BLACK` (which is > 0.0), and a nonlinear value of 1.0 maps
+    /// to a much greater than 1.0 scene-linear value.
     pub mod slog3 {
-        /// The normalized code value of scene-linear 0.0.
-        pub const CV_BLACK: f32 = 0.092864126;
+        /// The nonlinear value of scene-linear 0.0.
+        pub const NONLINEAR_BLACK: f32 = 0.092864126;
 
-        /// The scene-linear value of normalized code value 0.0.
+        /// The scene-linear value of nonlinear value 0.0.
         pub const LINEAR_MIN: f32 = -0.014023696;
 
-        /// The scene-linear value of normalized code value 1.0.
+        /// The scene-linear value of nonlinear value 1.0.
         pub const LINEAR_MAX: f32 = 38.420933;
 
-        /// From scene linear to (normalized) code values.
-        ///
-        /// For example, to get 10-bit code values do
-        /// `from_linear(scene_linear_in) * 1023.0`
+        /// Scene linear -> S-Log3.
         pub fn from_linear(x: f32) -> f32 {
             if x < 0.01125000 {
                 (x * (171.2102946929 - 95.0) / 0.01125000 + 95.0) / 1023.0
@@ -1456,10 +1411,7 @@ pub mod sony {
             }
         }
 
-        /// From (normalized) code values to scene linear.
-        ///
-        /// For example, if using 10-bit code values do
-        /// `to_linear(10_bit_cv_in / 1023.0)`
+        /// S-Log3 -> scene linear.
         pub fn to_linear(x: f32) -> f32 {
             if x < (171.2102946929 / 1023.0) {
                 (x * 1023.0 - 95.0) * 0.01125000 / (171.2102946929 - 95.0)
@@ -1474,7 +1426,7 @@ pub mod sony {
 
             #[test]
             fn constants() {
-                assert_eq!(from_linear(0.0), CV_BLACK);
+                assert_eq!(from_linear(0.0), NONLINEAR_BLACK);
                 assert_eq!(to_linear(0.0), LINEAR_MIN);
                 assert_eq!(to_linear(1.0), LINEAR_MAX);
             }
