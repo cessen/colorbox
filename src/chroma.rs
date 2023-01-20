@@ -1,5 +1,8 @@
 //! Chromaticity coordinates.
 
+pub const WHITEPOINT_E: (f64, f64) = (1.0 / 3.0, 1.0 / 3.0);
+pub const WHITEPOINT_D65: (f64, f64) = (0.31271, 0.32902);
+
 /// The chromaticities of a (usually) RGB color space.
 ///
 /// The coordinates are CIE 1931 xy chromaticity coordinates unless

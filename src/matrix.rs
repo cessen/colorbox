@@ -5,6 +5,10 @@
 //! you generally want to convert to `f32` for actual use.  The
 //! `to_3x3_f32()` and `to_4x4_f32()` functions are provided for that
 //! purpose.
+//!
+//! When generating e.g. lookup tables, it may be useful to directly
+//! transform colors by matrices generated with this module.
+//! `transform_color()` is provided for that use case.
 
 use crate::chroma::Chromaticities;
 
@@ -285,6 +289,18 @@ macro_rules! matrix_compose {
     };
 }
 
+/// Transforms a color by a matrix.
+#[inline]
+pub fn transform_color(color: [f64; 3], m: Matrix) -> [f64; 3] {
+    let mut c = [0.0f64; 3];
+
+    c[0] = (color[0] * m[0][0]) + (color[1] * m[0][1]) + (color[2] * m[0][2]);
+    c[1] = (color[0] * m[1][0]) + (color[1] * m[1][1]) + (color[2] * m[1][2]);
+    c[2] = (color[0] * m[2][0]) + (color[1] * m[2][1]) + (color[2] * m[2][2]);
+
+    c
+}
+
 /// Converts to a 3x3 f32 matrix with a flattened layout.
 pub fn to_3x3_f32(m: Matrix) -> [f32; 9] {
     [
@@ -320,18 +336,6 @@ pub fn to_4x4_f32(m: Matrix) -> [f32; 16] {
         0.0,
         1.0,
     ]
-}
-
-/// Transforms a color by a matrix.
-#[inline]
-fn transform_color(color: [f64; 3], m: Matrix) -> [f64; 3] {
-    let mut c = [0.0f64; 3];
-
-    c[0] = (color[0] * m[0][0]) + (color[1] * m[0][1]) + (color[2] * m[0][2]);
-    c[1] = (color[0] * m[1][0]) + (color[1] * m[1][1]) + (color[2] * m[1][2]);
-    c[2] = (color[0] * m[2][0]) + (color[1] * m[2][1]) + (color[2] * m[2][2]);
-
-    c
 }
 
 //-------------------------------------------------------------
