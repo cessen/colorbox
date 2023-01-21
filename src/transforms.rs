@@ -94,6 +94,197 @@ pub mod ocio {
     }
 }
 
+/// Various methods for clipping out-of-gamut RGB colors.
+///
+/// All functions in this module take the rgb color to be clipped and an
+/// optional `channel_max` as the first two parameters.
+///
+/// If `channel_max` is `None`, then the gamut is assumed to extend to
+/// infinite luminance, and colors will not be clipped on that axis.
+/// This is typically useful for processing input colors (e.g. footage,
+/// textures).  If `channel_max` is `Some(value)`, then `value` is
+/// the maximum value each RGB channel can be in the output, and colors
+/// will be clipped to that as well.  This is typically useful for
+/// processing output colors (e.g. for display).
+pub mod gamut_clip {
+    use crate::{
+        matrix::{transform_color, Matrix},
+        transforms::oklab::{oklab_to_oklch, oklab_to_xyz_d65, oklch_to_oklab, xyz_d65_to_oklab},
+    };
+
+    /// A simple but reasonably robust approach that clips in RGB space.
+    ///
+    /// - `luminance_weights`: the relative amount that each RGB channel
+    ///   contributes to luminance.  The three weights should add up to
+    ///   1.0.
+    pub fn rgb_clip(
+        rgb: [f64; 3],
+        channel_max: Option<f64>,
+        clip_negative_luminance: bool,
+        luminance_weights: [f64; 3],
+    ) -> [f64; 3] {
+        // Early-out for in-gamut colors.
+        if let Some(m) = channel_max {
+            if rgb[0] >= 0.0
+                && rgb[1] >= 0.0
+                && rgb[2] >= 0.0
+                && rgb[0] <= m
+                && rgb[1] <= m
+                && rgb[2] <= m
+            {
+                return rgb;
+            }
+        } else if rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0 {
+            return rgb;
+        };
+
+        // Compute luminance.
+        let l = (rgb[0] * luminance_weights[0])
+            + (rgb[1] * luminance_weights[1])
+            + (rgb[2] * luminance_weights[2]);
+
+        // Early out for zero or negative luminance.
+        if l == 0.0 || (l < 0.0 && clip_negative_luminance) {
+            return [0.0, 0.0, 0.0];
+        }
+
+        // Early out for over-luminant colors.
+        if let Some(m) = channel_max {
+            // Early-out for
+            if l > m {
+                return [m; 3];
+            }
+        }
+
+        let is_in_gamut = |rgb: [f64; 3]| {
+            // Negative luminance colors.
+            if rgb[0] < 0.0 && rgb[1] < 0.0 && rgb[2] < 0.0 {
+                return true;
+            }
+
+            // Positive luminance colors.
+            if let Some(m) = channel_max {
+                rgb[0] >= 0.0
+                    && rgb[1] >= 0.0
+                    && rgb[2] >= 0.0
+                    && rgb[0] <= m
+                    && rgb[1] <= m
+                    && rgb[2] < m
+            } else {
+                rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0
+            }
+        };
+
+        let mut rgb_from = rgb;
+        let mut rgb_to = [l; 3];
+
+        // Use binary search to iteratively find the clip point.
+        // TODO: just directly intersect the gamut.  The math isn't hard,
+        // I just couldn't be bothered, and already had this routine from
+        // `oklab_clip()` where it's actually necessary.
+        for _ in 0..32 {
+            let rgb_mid = [
+                (rgb_from[0] + rgb_to[0]) * 0.5,
+                (rgb_from[1] + rgb_to[1]) * 0.5,
+                (rgb_from[2] + rgb_to[2]) * 0.5,
+            ];
+
+            if is_in_gamut(rgb_mid) {
+                rgb_to = rgb_mid;
+            } else {
+                rgb_from = rgb_mid;
+            }
+        }
+
+        rgb_to
+    }
+
+    /// Uses OkLab space to clip out-of-gamut rgb colors in a relatively
+    /// pleasing way.
+    ///
+    /// The to and from matrices convert between the rgb color space and
+    /// CIE XYZ space.  Since OkLab assumes a D65 whitepoint, these
+    /// matrices should include whitepoint adaptation to/from D65 if
+    /// needed.
+    ///
+    /// - `to_xyz_d65_mat`: RGB -> XYZ transform matrix.  Should include
+    ///   adaptation to a D65 whitepoint if needed.
+    /// - `from_xyz_d65_mat`: inverse of `to_xyz_d65_mat`.
+    /// - `method`: the gamut clipping method to use.
+    ///
+    /// Returns the clipped RGB color.
+    pub fn oklab_clip(
+        rgb: [f64; 3],
+        channel_max: Option<f64>,
+        to_xyz_d65_mat: Matrix,
+        from_xyz_d65_mat: Matrix,
+    ) -> [f64; 3] {
+        let from_rgb = |rgb| oklab_to_oklch(xyz_d65_to_oklab(transform_color(rgb, to_xyz_d65_mat)));
+        let to_rgb = |lch| transform_color(oklab_to_xyz_d65(oklch_to_oklab(lch)), from_xyz_d65_mat);
+        let is_in_gamut = |rgb: [f64; 3]| {
+            if let Some(m) = channel_max {
+                rgb[0] >= 0.0
+                    && rgb[1] >= 0.0
+                    && rgb[2] >= 0.0
+                    && rgb[0] <= m
+                    && rgb[1] <= m
+                    && rgb[2] < m
+            } else {
+                rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0
+            }
+        };
+
+        // Early out: if we're already in gamut, just return the original rgb value.
+        if is_in_gamut(rgb) {
+            return rgb;
+        }
+
+        let mut lch_from = from_rgb(rgb);
+
+        // Projection target is equal-luminance gray, but with
+        // luminance clipped to [0.0, max].
+        let mut lch_target = [
+            if let Some(m) = channel_max {
+                lch_from[0].min(from_rgb([m, m, m])[0])
+            } else {
+                lch_from[0]
+            }
+            .max(0.0),
+            0.0,
+            lch_from[2],
+        ];
+
+        // Clip negative luminance to zero.
+        if lch_from[0] <= 0.0 {
+            return [0.0, 0.0, 0.0];
+        }
+
+        // Use binary search to iteratively find the clip point.
+        for _ in 0..32 {
+            let lch_mid = [
+                (lch_from[0] + lch_target[0]) * 0.5,
+                (lch_from[1] + lch_target[1]) * 0.5,
+                (lch_from[2] + lch_target[2]) * 0.5,
+            ];
+
+            if is_in_gamut(to_rgb(lch_mid)) {
+                lch_target = lch_mid;
+            } else {
+                lch_from = lch_mid;
+            }
+
+            // Termination criteria.
+            if (lch_from[1] - lch_target[1]).abs() < 0.001
+                && ((lch_from[0] / lch_target[0]) - 1.0).abs() < 0.001
+            {
+                break;
+            }
+        }
+
+        to_rgb(lch_target)
+    }
+}
+
 pub mod oklab {
     use crate::matrix::{transform_color, Matrix};
 
@@ -169,7 +360,7 @@ pub mod oklab {
     }
 
     #[inline(always)]
-    fn oklab_to_oklch(lab: [f64; 3]) -> [f64; 3] {
+    pub(crate) fn oklab_to_oklch(lab: [f64; 3]) -> [f64; 3] {
         let c = ((lab[1] * lab[1]) + (lab[2] * lab[2])).sqrt();
         let h = lab[2].atan2(lab[1]);
 
@@ -177,98 +368,11 @@ pub mod oklab {
     }
 
     #[inline(always)]
-    fn oklch_to_oklab(lch: [f64; 3]) -> [f64; 3] {
+    pub(crate) fn oklch_to_oklab(lch: [f64; 3]) -> [f64; 3] {
         let a = lch[1] * lch[2].cos();
         let b = lch[1] * lch[2].sin();
 
         [lch[0], a, b]
-    }
-
-    /// Uses OkLab space to clip out-of-gamut rgb colors in a relatively
-    /// pleasing way.
-    ///
-    /// The to and from matrices convert between the rgb color space and
-    /// CIE XYZ space.  Since OkLab assumes a D65 whitepoint, these
-    /// matrices should include whitepoint adaptation to/from D65 if
-    /// needed.
-    ///
-    /// - `rgb`: the input color to be clipped.  Assumed to be linear.
-    /// - `to_xyz_d65_mat`: transform matrix from RGB -> XYZ.  Should
-    ///   include adaptation to a D65 whitepoint if needed.
-    /// - `from_xyz_d65_mat`: transform matrix from XYZ -> RGB.  Should
-    ///   include adaptation from a D65 whitepoint if needed.
-    /// - `method`: the gamut clipping method to use.
-    ///
-    /// Returns the clipped RGB color.
-    pub fn rgb_gamut_clip(
-        rgb: [f64; 3],
-        channel_max: Option<f64>,
-        to_xyz_d65_mat: Matrix,
-        from_xyz_d65_mat: Matrix,
-    ) -> [f64; 3] {
-        let from_rgb = |rgb| oklab_to_oklch(xyz_d65_to_oklab(transform_color(rgb, to_xyz_d65_mat)));
-        let to_rgb = |lch| transform_color(oklab_to_xyz_d65(oklch_to_oklab(lch)), from_xyz_d65_mat);
-        let is_in_gamut = |rgb: [f64; 3]| {
-            if let Some(m) = channel_max {
-                rgb[0] >= 0.0
-                    && rgb[1] >= 0.0
-                    && rgb[2] >= 0.0
-                    && rgb[0] <= m
-                    && rgb[1] <= m
-                    && rgb[2] < m
-            } else {
-                rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0
-            }
-        };
-
-        // Early out: if we're already in gamut, just return the original rgb value.
-        if is_in_gamut(rgb) {
-            return rgb;
-        }
-
-        let mut lch_from = from_rgb(rgb);
-
-        // Projection target is equal-luminance gray, but with
-        // luminance clipped to [0.0, max].
-        let mut lch_target = [
-            if let Some(m) = channel_max {
-                lch_from[0].min(from_rgb([m, m, m])[0])
-            } else {
-                lch_from[0]
-            }
-            .max(0.0),
-            0.0,
-            lch_from[2],
-        ];
-
-        // Clip negative luminance to zero.
-        if lch_from[0] <= 0.0 {
-            return [0.0, 0.0, 0.0];
-        }
-
-        // Use binary search to iteratively find the clip point.
-        for _ in 0..32 {
-            let lch_mid = [
-                (lch_from[0] + lch_target[0]) * 0.5,
-                (lch_from[1] + lch_target[1]) * 0.5,
-                (lch_from[2] + lch_target[2]) * 0.5,
-            ];
-
-            if is_in_gamut(to_rgb(lch_mid)) {
-                lch_target = lch_mid;
-            } else {
-                lch_from = lch_mid;
-            }
-
-            // Termination criteria.
-            if (lch_from[1] - lch_target[1]).abs() < 0.001
-                && ((lch_from[0] / lch_target[0]) - 1.0).abs() < 0.001
-            {
-                break;
-            }
-        }
-
-        to_rgb(lch_target)
     }
 
     //---------------------------------------------------------
