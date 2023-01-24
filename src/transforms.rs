@@ -117,11 +117,18 @@ pub mod gamut_clip {
     /// - `luminance_weights`: the relative amount that each RGB channel
     ///   contributes to luminance.  The three weights should add up to
     ///   1.0.
+    /// - `rolloff`: It specifies how much to "cheat" the luminance
+    ///   mapping of out-of-gamut colors so that they stay saturated for
+    ///   longer before blowing out to white.  0.0 is no cheating, and
+    ///   larger values sacrifice luminance more and more.  Good values
+    ///   are generally in the [0.0, 2.0] range.
+    ///   Note: this is only meaningful when `channel_max` is not `None`.
     pub fn rgb_clip(
         rgb: [f64; 3],
         channel_max: Option<f64>,
         clip_negative_luminance: bool,
         luminance_weights: [f64; 3],
+        rolloff: f64,
     ) -> [f64; 3] {
         // Early-out for in-gamut colors.
         if let Some(m) = channel_max {
@@ -143,60 +150,79 @@ pub mod gamut_clip {
             + (rgb[1] * luminance_weights[1])
             + (rgb[2] * luminance_weights[2]);
 
-        // Early out for zero or negative luminance.
+        // Early out for zero or clipped negative luminance.
         if l == 0.0 || (l < 0.0 && clip_negative_luminance) {
             return [0.0, 0.0, 0.0];
         }
 
-        // Early out for over-luminant colors.
-        if let Some(m) = channel_max {
-            // Early-out for
-            if l > m {
-                return [m; 3];
-            }
-        }
+        // Clip with unbounded channels first.
+        let rgb = {
+            let delta = [rgb[0] - l, rgb[1] - l, rgb[2] - l];
+            let scales = [-l / delta[0], -l / delta[1], -l / delta[2]];
 
-        let is_in_gamut = |rgb: [f64; 3]| {
-            // Negative luminance colors.
-            if rgb[0] < 0.0 && rgb[1] < 0.0 && rgb[2] < 0.0 {
-                return true;
+            let mut scale = 1.0;
+            for s in scales {
+                if s > 0.0 && s < scale {
+                    scale = s;
+                }
             }
 
-            // Positive luminance colors.
-            if let Some(m) = channel_max {
-                rgb[0] >= 0.0
-                    && rgb[1] >= 0.0
-                    && rgb[2] >= 0.0
-                    && rgb[0] <= m
-                    && rgb[1] <= m
-                    && rgb[2] < m
-            } else {
-                rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0
-            }
+            [
+                l + (delta[0] * scale),
+                l + (delta[1] * scale),
+                l + (delta[2] * scale),
+            ]
         };
 
-        let mut rgb_from = rgb;
-        let mut rgb_to = [l; 3];
-
-        // Use binary search to iteratively find the clip point.
-        // TODO: just directly intersect the gamut.  The math isn't hard,
-        // I just couldn't be bothered, and already had this routine from
-        // `oklab_clip()` where it's actually necessary.
-        for _ in 0..32 {
-            let rgb_mid = [
-                (rgb_from[0] + rgb_to[0]) * 0.5,
-                (rgb_from[1] + rgb_to[1]) * 0.5,
-                (rgb_from[2] + rgb_to[2]) * 0.5,
-            ];
-
-            if is_in_gamut(rgb_mid) {
-                rgb_to = rgb_mid;
-            } else {
-                rgb_from = rgb_mid;
-            }
+        // No further processing on negative-luminance colors.
+        if l < 0.0 {
+            return rgb;
         }
 
-        rgb_to
+        // Clip with channel maximum if one is specified.
+        if let Some(channel_max) = channel_max {
+            // Luminance rolloff for still out-of-gamut colors.
+            let l = {
+                let n = l / channel_max;
+                let a = rolloff + 1.0;
+                let n2 = 1.0 - (1.0 - (n.min(a) / a)).powf(a);
+                n2 * channel_max
+            };
+
+            // Early out for over-luminant colors.
+            if l > channel_max {
+                return [channel_max; 3];
+            }
+
+            let is_in_gamut = |rgb: [f64; 3]| {
+                rgb[0] <= channel_max && rgb[1] <= channel_max && rgb[2] <= channel_max
+            };
+
+            let mut rgb_from = rgb;
+            let mut rgb_to = [l; 3];
+
+            // Use binary search to iteratively find the clip point.
+            // TODO: just directly intersect the gamut.  The math isn't hard,
+            // I just couldn't be bothered, and already had this routine from
+            // `oklab_clip()` where it's actually necessary.
+            for _ in 0..32 {
+                let rgb_mid = [
+                    (rgb_from[0] + rgb_to[0]) * 0.5,
+                    (rgb_from[1] + rgb_to[1]) * 0.5,
+                    (rgb_from[2] + rgb_to[2]) * 0.5,
+                ];
+
+                if is_in_gamut(rgb_mid) {
+                    rgb_to = rgb_mid;
+                } else {
+                    rgb_from = rgb_mid;
+                }
+            }
+
+            rgb_to
+        } else {
+            rgb
+        }
     }
 
     /// Uses OkLab space to clip out-of-gamut rgb colors in a relatively
