@@ -19,7 +19,7 @@ pub fn write_1d<W: Write>(
     writer.write_all(b"TITLE \"untitled\"\n")?;
     writer.write_all(
         format!(
-            "DOMAIN_MIN {:0.7} {:0.7} {:0.7}\n",
+            "DOMAIN_MIN {} {} {}\n",
             filter_non_finite(ranges[0].0),
             filter_non_finite(ranges[1].0),
             filter_non_finite(ranges[2].0),
@@ -28,7 +28,7 @@ pub fn write_1d<W: Write>(
     )?;
     writer.write_all(
         format!(
-            "DOMAIN_MAX {:0.7} {:0.7} {:0.7}\n",
+            "DOMAIN_MAX {} {} {}\n",
             filter_non_finite(ranges[0].1),
             filter_non_finite(ranges[1].1),
             filter_non_finite(ranges[2].1),
@@ -45,7 +45,7 @@ pub fn write_1d<W: Write>(
     {
         writer.write_all(
             format!(
-                "{:0.7} {:0.7} {:0.7}\n",
+                "{} {} {}\n",
                 filter_non_finite(r),
                 filter_non_finite(g),
                 filter_non_finite(b),
@@ -73,7 +73,7 @@ pub fn write_3d<W: Write>(
     writer.write_all(b"TITLE \"untitled\"\n")?;
     writer.write_all(
         format!(
-            "DOMAIN_MIN {:0.7} {:0.7} {:0.7}\n",
+            "DOMAIN_MIN {} {} {}\n",
             filter_non_finite(ranges[0].0),
             filter_non_finite(ranges[1].0),
             filter_non_finite(ranges[2].0),
@@ -82,7 +82,7 @@ pub fn write_3d<W: Write>(
     )?;
     writer.write_all(
         format!(
-            "DOMAIN_MAX {:0.7} {:0.7} {:0.7}\n",
+            "DOMAIN_MAX {} {} {}\n",
             filter_non_finite(ranges[0].1),
             filter_non_finite(ranges[1].1),
             filter_non_finite(ranges[2].1),
@@ -99,7 +99,7 @@ pub fn write_3d<W: Write>(
     {
         writer.write_all(
             format!(
-                "{:0.7} {:0.7} {:0.7}\n",
+                "{} {} {}\n",
                 filter_non_finite(r),
                 filter_non_finite(g),
                 filter_non_finite(b),

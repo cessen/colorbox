@@ -38,7 +38,7 @@ pub fn write<W: Write>(
         writer.write_all(format!("LUT_1D_SIZE {}\n", tables[0].len()).as_bytes())?;
         writer.write_all(
             format!(
-                "LUT_1D_INPUT_RANGE {:0.7} {:0.7}\n",
+                "LUT_1D_INPUT_RANGE {} {}\n",
                 filter_non_finite(range_min),
                 filter_non_finite(range_max),
             )
@@ -51,7 +51,7 @@ pub fn write<W: Write>(
         writer.write_all(format!("LUT_3D_SIZE {}\n", res).as_bytes())?;
         writer.write_all(
             format!(
-                "LUT_3D_INPUT_RANGE {:0.7} {:0.7}\n",
+                "LUT_3D_INPUT_RANGE {} {}\n",
                 filter_non_finite(range_min),
                 filter_non_finite(range_max),
             )
@@ -69,7 +69,7 @@ pub fn write<W: Write>(
         {
             writer.write_all(
                 format!(
-                    "{:0.7} {:0.7} {:0.7}\n",
+                    "{} {} {}\n",
                     filter_non_finite(r),
                     filter_non_finite(g),
                     filter_non_finite(b),
@@ -87,7 +87,7 @@ pub fn write<W: Write>(
         {
             writer.write_all(
                 format!(
-                    "{:0.7} {:0.7} {:0.7}\n",
+                    "{} {} {}\n",
                     filter_non_finite(r),
                     filter_non_finite(g),
                     filter_non_finite(b),

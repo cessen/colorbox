@@ -22,7 +22,7 @@ pub fn write<W: Write>(
     writer.write_all(b"Version 1\n")?;
     writer.write_all(
         format!(
-            "From {:0.7} {:0.7}\n",
+            "From {} {}\n",
             filter_non_finite(range_min),
             filter_non_finite(range_max)
         )
@@ -34,7 +34,7 @@ pub fn write<W: Write>(
     for i in 0..tables[0].len() {
         writer.write_all(b" ")?;
         for t in tables.iter() {
-            writer.write_all(format!(" {:0.7}", filter_non_finite(t[i])).as_bytes())?;
+            writer.write_all(format!(" {}", filter_non_finite(t[i])).as_bytes())?;
         }
         writer.write_all(b"\n")?;
     }
