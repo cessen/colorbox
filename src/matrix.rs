@@ -167,6 +167,16 @@ pub fn xyz_chromatic_adaptation_matrix(
     multiply(multiply(to_abc, w_scale), from_abc)
 }
 
+/// Creates a matrix that simply scales each component of a color by the
+/// given scale values.
+pub fn scale_matrix(scale: [f64; 3]) -> Matrix {
+    [
+        [scale[0], 0.0, 0.0],
+        [0.0, scale[1], 0.0],
+        [0.0, 0.0, scale[2]],
+    ]
+}
+
 /// Calculates the inverse of a matrix.
 ///
 /// Returns `None` is the matrix is not invertible.
