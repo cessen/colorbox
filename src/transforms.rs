@@ -1,5 +1,96 @@
 //! Useful transforms to use as building blocks.
 
+/// Intersects the directed line segment `from` -> `to` with the rgb gamut.
+///
+/// The intention is to find the closest in-gamut color to `from` on the
+/// line segment.  Thus `to` should typically be an in-gamut color, and
+/// if `from` is already in gamut then `from` is returned.
+///
+/// - `from`: a possibly out-of-gamut color.
+/// - `to`: a (presumably) in-gamut color.
+/// - `use_ceiling`: if true, the gamut is given a ceiling of rgb
+///   [1.0, 1.0, 1.0] (bounded luminance).  Otherwise no ceiling.
+/// - `use_floor`: if true, the gamut is given a floor of rgb
+///   [0.0, 0.0, 0.0] (no negative-luminance colors).  Otherwise
+///   colors with all negative components are treated as in gamut
+///   with negative luminance.
+pub fn rgb_gamut_intersect(
+    from: [f64; 3],
+    to: [f64; 3],
+    use_ceiling: bool,
+    use_floor: bool,
+) -> [f64; 3] {
+    // Fast bounding box intersection algorithm often used in ray tracing.
+    fn bbox_intersect(
+        from: [f64; 3],
+        dir_inv: [f64; 3],
+        box_min: [f64; 3],
+        box_max: [f64; 3],
+    ) -> Option<f64> {
+        const BBOX_MAXT_ADJUST: f64 = 1.000_000_24;
+
+        // Slab intersections.
+        let t1 = [
+            (box_min[0] - from[0]) * dir_inv[0],
+            (box_min[1] - from[1]) * dir_inv[1],
+            (box_min[2] - from[2]) * dir_inv[2],
+        ];
+        let t2 = [
+            (box_max[0] - from[0]) * dir_inv[0],
+            (box_max[1] - from[1]) * dir_inv[1],
+            (box_max[2] - from[2]) * dir_inv[2],
+        ];
+
+        // Near and far hits.
+        let far_t = [t1[0].max(t2[0]), t1[1].max(t2[1]), t1[2].max(t2[2])];
+        let near_t = [t1[0].min(t2[0]), t1[1].min(t2[1]), t1[2].min(t2[2])];
+        let far_hit_t = far_t[0].min(far_t[1]).min(far_t[2]).min(1.0) * BBOX_MAXT_ADJUST;
+        let near_hit_t = near_t[0].max(near_t[1]).max(near_t[2]);
+
+        // Check if we hit.
+        if near_hit_t <= far_hit_t {
+            Some(near_hit_t.max(0.0).min(1.0))
+        } else {
+            None
+        }
+    }
+
+    // Compute gamut intersections.
+    let dir = [(to[0] - from[0]), (to[1] - from[1]), (to[2] - from[2])];
+    let dir_inv = [1.0 / dir[0], 1.0 / dir[1], 1.0 / dir[2]];
+    let positive_hit_t = bbox_intersect(
+        from,
+        dir_inv,
+        [0.0; 3],
+        if use_ceiling {
+            [1.0; 3]
+        } else {
+            [f64::INFINITY; 3]
+        },
+    );
+    let negative_hit_t = if use_floor {
+        None
+    } else {
+        bbox_intersect(from, dir_inv, [f64::NEG_INFINITY; 3], [0.0; 3])
+    };
+    let hit_t = match (positive_hit_t, negative_hit_t) {
+        (None, None) => {
+            return to;
+        }
+        (Some(t), None) => t,
+        (None, Some(t)) => t,
+        (Some(t1), Some(t2)) => t1.min(t2),
+    };
+
+    // Compute the hit point.
+    [
+        // Clip to zero for possible floating point rounding error.
+        (from[0] + (dir[0] * hit_t)).max(0.0),
+        (from[1] + (dir[1] * hit_t)).max(0.0),
+        (from[2] + (dir[2] * hit_t)).max(0.0),
+    ]
+}
+
 /// Open Color IO compatible fixed function transforms.
 ///
 /// The transforms in this module reproduce some of the fixed-function
@@ -91,370 +182,5 @@ pub mod ocio {
             grn * delta + rgb_min,
             blu * delta + rgb_min,
         ]
-    }
-}
-
-/// Various methods for clipping out-of-gamut RGB colors.
-///
-/// All functions in this module take the rgb color to be clipped and an
-/// optional `channel_max` as the first two parameters.
-///
-/// If `channel_max` is `None`, then the gamut is assumed to extend to
-/// infinite luminance, and colors will not be clipped on that axis.
-/// This is typically useful for processing input colors (e.g. footage,
-/// textures).  If `channel_max` is `Some(value)`, then `value` is
-/// the maximum value each RGB channel can be in the output, and colors
-/// will be clipped to that as well.  This is typically useful for
-/// processing output colors (e.g. for display).
-pub mod gamut_clip {
-    use crate::{
-        matrix::{transform_color, Matrix},
-        transforms::oklab::{oklab_to_oklch, oklab_to_xyz_d65, oklch_to_oklab, xyz_d65_to_oklab},
-    };
-
-    /// A simple but reasonably robust approach that clips in RGB space.
-    ///
-    /// - `luminance_weights`: the relative amount that each RGB channel
-    ///   contributes to luminance.  The three weights should add up to
-    ///   1.0.
-    /// - `rolloff`: It specifies how much to "cheat" the luminance
-    ///   mapping of out-of-gamut colors so that they stay saturated for
-    ///   longer before blowing out to white.  0.0 is no cheating, and
-    ///   larger values sacrifice luminance more and more.  Good values
-    ///   are generally in the [0.0, 2.0] range.
-    ///   Note: this is only meaningful when `channel_max` is not `None`.
-    pub fn rgb_clip(
-        rgb: [f64; 3],
-        channel_max: Option<f64>,
-        clip_negative_luminance: bool,
-        luminance_weights: [f64; 3],
-        rolloff: f64,
-    ) -> [f64; 3] {
-        // Early-out for in-gamut colors.
-        if let Some(m) = channel_max {
-            if rgb[0] >= 0.0
-                && rgb[1] >= 0.0
-                && rgb[2] >= 0.0
-                && rgb[0] <= m
-                && rgb[1] <= m
-                && rgb[2] <= m
-            {
-                return rgb;
-            }
-        } else if rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0 {
-            return rgb;
-        };
-
-        // Compute luminance.
-        let l = (rgb[0] * luminance_weights[0])
-            + (rgb[1] * luminance_weights[1])
-            + (rgb[2] * luminance_weights[2]);
-
-        // Early out for zero or clipped negative luminance.
-        if l == 0.0 || (l < 0.0 && clip_negative_luminance) {
-            return [0.0, 0.0, 0.0];
-        }
-
-        // Clip with unbounded channels first.
-        let rgb = {
-            let delta = [rgb[0] - l, rgb[1] - l, rgb[2] - l];
-            let scales = [-l / delta[0], -l / delta[1], -l / delta[2]];
-
-            let mut scale = 1.0;
-            for s in scales {
-                if s > 0.0 && s < scale {
-                    scale = s;
-                }
-            }
-
-            [
-                l + (delta[0] * scale),
-                l + (delta[1] * scale),
-                l + (delta[2] * scale),
-            ]
-        };
-
-        // No further processing on negative-luminance colors.
-        if l < 0.0 {
-            return rgb;
-        }
-
-        // Clip with channel maximum if one is specified.
-        if let Some(channel_max) = channel_max {
-            // Luminance rolloff for still out-of-gamut colors.
-            let l = {
-                let n = l / channel_max;
-                let a = rolloff + 1.0;
-                let n2 = 1.0 - (1.0 - (n.min(a) / a)).powf(a);
-                n2 * channel_max
-            };
-
-            // Early out for over-luminant colors.
-            if l > channel_max {
-                return [channel_max; 3];
-            }
-
-            let is_in_gamut = |rgb: [f64; 3]| {
-                rgb[0] <= channel_max && rgb[1] <= channel_max && rgb[2] <= channel_max
-            };
-
-            let mut rgb_from = rgb;
-            let mut rgb_to = [l; 3];
-
-            // Use binary search to iteratively find the clip point.
-            // TODO: just directly intersect the gamut.  The math isn't hard,
-            // I just couldn't be bothered, and already had this routine from
-            // `oklab_clip()` where it's actually necessary.
-            for _ in 0..32 {
-                let rgb_mid = [
-                    (rgb_from[0] + rgb_to[0]) * 0.5,
-                    (rgb_from[1] + rgb_to[1]) * 0.5,
-                    (rgb_from[2] + rgb_to[2]) * 0.5,
-                ];
-
-                if is_in_gamut(rgb_mid) {
-                    rgb_to = rgb_mid;
-                } else {
-                    rgb_from = rgb_mid;
-                }
-            }
-
-            rgb_to
-        } else {
-            rgb
-        }
-    }
-
-    /// Uses OkLab space to clip out-of-gamut rgb colors in a relatively
-    /// pleasing way.
-    ///
-    /// The to and from matrices convert between the rgb color space and
-    /// CIE XYZ space.  Since OkLab assumes a D65 whitepoint, these
-    /// matrices should include whitepoint adaptation to/from D65 if
-    /// needed.
-    ///
-    /// - `to_xyz_d65_mat`: RGB -> XYZ transform matrix.  Should include
-    ///   adaptation to a D65 whitepoint if needed.
-    /// - `from_xyz_d65_mat`: inverse of `to_xyz_d65_mat`.
-    /// - `method`: the gamut clipping method to use.
-    ///
-    /// Returns the clipped RGB color.
-    pub fn oklab_clip(
-        rgb: [f64; 3],
-        channel_max: Option<f64>,
-        to_xyz_d65_mat: Matrix,
-        from_xyz_d65_mat: Matrix,
-    ) -> [f64; 3] {
-        let from_rgb = |rgb| oklab_to_oklch(xyz_d65_to_oklab(transform_color(rgb, to_xyz_d65_mat)));
-        let to_rgb = |lch| transform_color(oklab_to_xyz_d65(oklch_to_oklab(lch)), from_xyz_d65_mat);
-        let is_in_gamut = |rgb: [f64; 3]| {
-            if let Some(m) = channel_max {
-                rgb[0] >= 0.0
-                    && rgb[1] >= 0.0
-                    && rgb[2] >= 0.0
-                    && rgb[0] <= m
-                    && rgb[1] <= m
-                    && rgb[2] < m
-            } else {
-                rgb[0] >= 0.0 && rgb[1] >= 0.0 && rgb[2] >= 0.0
-            }
-        };
-
-        // Early out: if we're already in gamut, just return the original rgb value.
-        if is_in_gamut(rgb) {
-            return rgb;
-        }
-
-        let mut lch_from = from_rgb(rgb);
-
-        // Projection target is equal-luminance gray, but with
-        // luminance clipped to [0.0, max].
-        let mut lch_target = [
-            if let Some(m) = channel_max {
-                lch_from[0].min(from_rgb([m, m, m])[0])
-            } else {
-                lch_from[0]
-            }
-            .max(0.0),
-            0.0,
-            lch_from[2],
-        ];
-
-        // Clip negative luminance to zero.
-        if lch_from[0] <= 0.0 {
-            return [0.0, 0.0, 0.0];
-        }
-
-        // Use binary search to iteratively find the clip point.
-        for _ in 0..32 {
-            let lch_mid = [
-                (lch_from[0] + lch_target[0]) * 0.5,
-                (lch_from[1] + lch_target[1]) * 0.5,
-                (lch_from[2] + lch_target[2]) * 0.5,
-            ];
-
-            if is_in_gamut(to_rgb(lch_mid)) {
-                lch_target = lch_mid;
-            } else {
-                lch_from = lch_mid;
-            }
-
-            // Termination criteria.
-            if (lch_from[1] - lch_target[1]).abs() < 0.001
-                && ((lch_from[0] / lch_target[0]) - 1.0).abs() < 0.001
-            {
-                break;
-            }
-        }
-
-        to_rgb(lch_target)
-    }
-}
-
-pub mod oklab {
-    use crate::matrix::{transform_color, Matrix};
-
-    /// CIE XYZ -> OkLab.
-    ///
-    /// Note that OkLab assumes a D65 whitepoint, so input colors with a
-    /// different whitepoint should be adapted to that before being
-    /// passed.
-    #[inline]
-    pub fn xyz_d65_to_oklab(xyz: [f64; 3]) -> [f64; 3] {
-        const M1: Matrix = [
-            [0.8189330101, 0.3618667424, -0.1288597137],
-            [0.0329845436, 0.9293118715, 0.0361456387],
-            [0.0482003018, 0.2643662691, 0.6338517070],
-        ];
-        const M2: Matrix = [
-            [0.2104542553, 0.7936177850, -0.0040720468],
-            [1.9779984951, -2.4285922050, 0.4505937099],
-            [0.0259040371, 0.7827717662, -0.8086757660],
-        ];
-
-        let lms_linear = transform_color(xyz, M1);
-
-        // `abs` and `signum` keep it from choking on negative values.
-        let lms_nonlinear = [
-            lms_linear[0].abs().powf(1.0 / 3.0) * lms_linear[0].signum(),
-            lms_linear[1].abs().powf(1.0 / 3.0) * lms_linear[1].signum(),
-            lms_linear[2].abs().powf(1.0 / 3.0) * lms_linear[2].signum(),
-        ];
-
-        transform_color(lms_nonlinear, M2)
-    }
-
-    /// OkLab -> XYZ.
-    ///
-    /// Note that OkLab assumes a D65 whitepoint, so output colors have
-    /// that whitepoint and should be adapted if desired.
-    #[inline]
-    pub fn oklab_to_xyz_d65(oklab: [f64; 3]) -> [f64; 3] {
-        const M1_INV: Matrix = [
-            [1.2270138511035211, -0.5577999806518222, 0.2812561489664678],
-            [
-                -0.040580178423280586,
-                1.11225686961683,
-                -0.07167667866560119,
-            ],
-            [-0.0763812845057069, -0.4214819784180127, 1.5861632204407947],
-        ];
-        const M2_INV: Matrix = [
-            [0.9999999984505197, 0.3963377921737678, 0.21580375806075883],
-            [
-                1.0000000088817607,
-                -0.10556134232365633,
-                -0.0638541747717059,
-            ],
-            [
-                1.0000000546724108,
-                -0.08948418209496575,
-                -1.2914855378640917,
-            ],
-        ];
-
-        let lms_nonlinear = transform_color(oklab, M2_INV);
-
-        // `abs` and `signum` keep it from choking on negative values in `xyz_d65_to_oklab()`.
-        let lms_linear = [
-            lms_nonlinear[0].abs().powf(3.0) * lms_nonlinear[0].signum(),
-            lms_nonlinear[1].abs().powf(3.0) * lms_nonlinear[1].signum(),
-            lms_nonlinear[2].abs().powf(3.0) * lms_nonlinear[2].signum(),
-        ];
-
-        transform_color(lms_linear, M1_INV)
-    }
-
-    #[inline(always)]
-    pub(crate) fn oklab_to_oklch(lab: [f64; 3]) -> [f64; 3] {
-        let c = ((lab[1] * lab[1]) + (lab[2] * lab[2])).sqrt();
-        let h = lab[2].atan2(lab[1]);
-
-        [lab[0], c, h]
-    }
-
-    #[inline(always)]
-    pub(crate) fn oklch_to_oklab(lch: [f64; 3]) -> [f64; 3] {
-        let a = lch[1] * lch[2].cos();
-        let b = lch[1] * lch[2].sin();
-
-        [lch[0], a, b]
-    }
-
-    //---------------------------------------------------------
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn xyz_d65_to_oklab_01() {
-            const TEST_VECS: &[([f64; 3], [f64; 3])] = &[
-                ([0.95, 1.0, 1.089], [1.0, 0.0, 0.0]),
-                ([1.0, 0.0, 0.0], [0.45, 1.236, -0.019]),
-                ([0.0, 1.0, 0.0], [0.922, -0.671, 0.263]),
-                ([0.0, 0.0, 1.0], [0.153, -1.415, -0.449]),
-            ];
-            for (v1, v2) in TEST_VECS.iter().copied() {
-                let r1 = xyz_d65_to_oklab(v1);
-                for i in 0..3 {
-                    assert!((r1[i] - v2[i]).abs() < 0.002);
-                }
-            }
-        }
-
-        #[test]
-        fn oklab_to_xyz_d65_01() {
-            const TEST_VECS: &[([f64; 3], [f64; 3])] = &[
-                ([0.95, 1.0, 1.089], [1.0, 0.0, 0.0]),
-                ([1.0, 0.0, 0.0], [0.45, 1.236, -0.019]),
-                ([0.0, 1.0, 0.0], [0.922, -0.671, 0.263]),
-                ([0.0, 0.0, 1.0], [0.153, -1.415, -0.449]),
-            ];
-            for (v1, v2) in TEST_VECS.iter().copied() {
-                let r2 = oklab_to_xyz_d65(v2);
-                for i in 0..3 {
-                    assert!((v1[i] - r2[i]).abs() < 0.002);
-                }
-            }
-        }
-
-        #[test]
-        fn oklab_to_oklch_01() {
-            const TEST_VECS: &[[f64; 3]] = &[
-                [2.0, 1.0, 0.5],
-                [2.0, 0.65, 1.3],
-                [2.0, 0.7, 0.2],
-                [-2.0, 0.7, 0.2],
-                [2.0, -0.7, 0.2],
-                [2.0, 0.7, -0.2],
-            ];
-            for v in TEST_VECS.iter().copied() {
-                let v2 = oklch_to_oklab(oklab_to_oklch(v));
-                for i in 0..3 {
-                    assert!((v[i] - v2[i]).abs() < 0.00001);
-                }
-            }
-        }
     }
 }
