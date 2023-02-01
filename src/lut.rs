@@ -42,8 +42,8 @@ impl Lut1D {
     // Creates a 3-component 1D LUT from three functions and three input ranges.
     pub fn from_fn_3<F1, F2, F3>(
         points: usize,
-        min: (f32, f32, f32),
-        max: (f32, f32, f32),
+        min: [f32; 3],
+        max: [f32; 3],
         fs: (F1, F2, F3),
     ) -> Lut1D
     where
@@ -51,23 +51,23 @@ impl Lut1D {
         F2: Fn(f32) -> f32,
         F3: Fn(f32) -> f32,
     {
-        let inc = (
-            (max.0 as f64 - min.0 as f64) / (points - 1) as f64,
-            (max.1 as f64 - min.1 as f64) / (points - 1) as f64,
-            (max.2 as f64 - min.2 as f64) / (points - 1) as f64,
-        );
+        let inc = [
+            (max[0] as f64 - min[0] as f64) / (points - 1) as f64,
+            (max[1] as f64 - min[1] as f64) / (points - 1) as f64,
+            (max[2] as f64 - min[2] as f64) / (points - 1) as f64,
+        ];
         let mut tables = vec![Vec::new(), Vec::new(), Vec::new()];
         for i in 0..points {
-            let v0 = min.0 + (inc.0 * i as f64) as f32;
-            let v1 = min.1 + (inc.1 * i as f64) as f32;
-            let v2 = min.2 + (inc.2 * i as f64) as f32;
+            let v0 = min[0] + (inc[0] * i as f64) as f32;
+            let v1 = min[1] + (inc[1] * i as f64) as f32;
+            let v2 = min[2] + (inc[2] * i as f64) as f32;
             tables[0].push(fs.0(v0));
             tables[1].push(fs.1(v1));
             tables[2].push(fs.2(v2));
         }
 
         Lut1D {
-            ranges: vec![(min.0, max.0), (min.1, max.1), (min.2, max.2)],
+            ranges: vec![(min[0], max[0]), (min[1], max[1]), (min[2], max[2])],
             tables: tables,
         }
     }
@@ -258,6 +258,41 @@ pub struct Lut3D {
     pub range: [(f32, f32); 3],
     pub resolution: [usize; 3],
     pub tables: Vec<Vec<f32>>,
+}
+
+impl Lut3D {
+    pub fn from_fn<F: Fn(f32, f32, f32) -> (f32, f32, f32)>(
+        resolution: [usize; 3],
+        min: [f32; 3],
+        max: [f32; 3],
+        f: F,
+    ) -> Lut3D {
+        let inc = [
+            (max[0] as f64 - min[0] as f64) / (resolution[0] - 1) as f64,
+            (max[1] as f64 - min[1] as f64) / (resolution[1] - 1) as f64,
+            (max[2] as f64 - min[2] as f64) / (resolution[2] - 1) as f64,
+        ];
+        let mut tables = vec![Vec::new(), Vec::new(), Vec::new()];
+        for zi in 0..resolution[2] {
+            for yi in 0..resolution[1] {
+                for xi in 0..resolution[0] {
+                    let x_in = min[0] + (inc[0] * xi as f64) as f32;
+                    let y_in = min[1] + (inc[1] * yi as f64) as f32;
+                    let z_in = min[2] + (inc[2] * zi as f64) as f32;
+                    let (x, y, z) = f(x_in, y_in, z_in);
+                    tables[0].push(x);
+                    tables[1].push(y);
+                    tables[2].push(z);
+                }
+            }
+        }
+
+        Lut3D {
+            range: [(min[0], max[0]), (min[1], max[1]), (min[2], max[2])],
+            resolution: resolution,
+            tables: tables,
+        }
+    }
 }
 
 impl Default for Lut3D {
