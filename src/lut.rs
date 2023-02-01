@@ -39,6 +39,39 @@ impl Lut1D {
         }
     }
 
+    // Creates a 3-component 1D LUT from three functions and three input ranges.
+    pub fn from_fn_3<F1, F2, F3>(
+        points: usize,
+        min: (f32, f32, f32),
+        max: (f32, f32, f32),
+        fs: (F1, F2, F3),
+    ) -> Lut1D
+    where
+        F1: Fn(f32) -> f32,
+        F2: Fn(f32) -> f32,
+        F3: Fn(f32) -> f32,
+    {
+        let inc = (
+            (max.0 as f64 - min.0 as f64) / (points - 1) as f64,
+            (max.1 as f64 - min.1 as f64) / (points - 1) as f64,
+            (max.2 as f64 - min.2 as f64) / (points - 1) as f64,
+        );
+        let mut tables = vec![Vec::new(), Vec::new(), Vec::new()];
+        for i in 0..points {
+            let v0 = min.0 + (inc.0 * i as f64) as f32;
+            let v1 = min.1 + (inc.1 * i as f64) as f32;
+            let v2 = min.2 + (inc.2 * i as f64) as f32;
+            tables[0].push(fs.0(v0));
+            tables[1].push(fs.1(v1));
+            tables[2].push(fs.2(v2));
+        }
+
+        Lut1D {
+            ranges: vec![(min.0, max.0), (min.1, max.1), (min.2, max.2)],
+            tables: tables,
+        }
+    }
+
     /// Inverts the LUT, resampling it to the given number of samples.
     ///
     /// This assumes that the table is monotonically increasing.  This
