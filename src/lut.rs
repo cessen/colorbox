@@ -261,7 +261,7 @@ pub struct Lut3D {
 }
 
 impl Lut3D {
-    pub fn from_fn<F: Fn(f32, f32, f32) -> (f32, f32, f32)>(
+    pub fn from_fn<F: Fn((f32, f32, f32)) -> (f32, f32, f32)>(
         resolution: [usize; 3],
         min: [f32; 3],
         max: [f32; 3],
@@ -279,7 +279,7 @@ impl Lut3D {
                     let x_in = min[0] + (inc[0] * xi as f64) as f32;
                     let y_in = min[1] + (inc[1] * yi as f64) as f32;
                     let z_in = min[2] + (inc[2] * zi as f64) as f32;
-                    let (x, y, z) = f(x_in, y_in, z_in);
+                    let (x, y, z) = f((x_in, y_in, z_in));
                     tables[0].push(x);
                     tables[1].push(y);
                     tables[2].push(z);
