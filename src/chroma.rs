@@ -89,6 +89,14 @@ pub const ALEXA_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
     w: (0.3127, 0.3290),
 };
 
+/// Canon Cinema Gamut.
+pub const CANON_CINEMA_GAMUT: Chromaticities = Chromaticities {
+    r: (0.7400, 0.2700),
+    g: (0.1700, 1.1400),
+    b: (0.0800, -0.1000),
+    w: (0.3127, 0.3290),
+};
+
 /// DJI D-Gamut chromaticities.
 pub const DJI_D_GAMUT: Chromaticities = Chromaticities {
     r: (0.7100, 0.3100),
