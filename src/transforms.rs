@@ -310,6 +310,101 @@ pub mod ocio {
     }
 }
 
+/// Transform to/from the OkLab color space.
+pub mod oklab {
+    use crate::matrix::{transform_color, Matrix};
+
+    /// CIE XYZ -> OkLab.
+    ///
+    /// Note that OkLab assumes a D65 whitepoint, so input colors with a
+    /// different whitepoint should be adapted to that before being
+    /// passed.
+    #[inline]
+    pub fn from_xyz_d65(xyz: [f64; 3]) -> [f64; 3] {
+        const M1: Matrix = [
+            [0.8189330101, 0.3618667424, -0.1288597137],
+            [0.0329845436, 0.9293118715, 0.0361456387],
+            [0.0482003018, 0.2643662691, 0.6338517070],
+        ];
+        const M2: Matrix = [
+            [0.2104542553, 0.7936177850, -0.0040720468],
+            [1.9779984951, -2.4285922050, 0.4505937099],
+            [0.0259040371, 0.7827717662, -0.8086757660],
+        ];
+
+        let lms_linear = transform_color(xyz, M1);
+        let lms_nonlinear = [
+            lms_linear[0].cbrt(),
+            lms_linear[1].cbrt(),
+            lms_linear[2].cbrt(),
+        ];
+        transform_color(lms_nonlinear, M2)
+    }
+
+    /// OkLab -> CIE XYZ.
+    ///
+    /// Note that OkLab assumes a D65 whitepoint, so the returned color
+    /// will have that whitepoint and should be adapted if desired.
+    #[inline]
+    pub fn to_xyz_d65(oklab: [f64; 3]) -> [f64; 3] {
+        const M1_INV: Matrix = [
+            [1.2270138511035211, -0.5577999806518222, 0.2812561489664678],
+            [-0.040580178423280586, 1.11225686961683, -0.0716766786656012],
+            [-0.0763812845057069, -0.4214819784180127, 1.5861632204407947],
+        ];
+        const M2_INV: Matrix = [
+            [0.9999999984505197, 0.3963377921737678, 0.21580375806075883],
+            [1.0000000088817607, -0.10556134232365633, -0.063854174771706],
+            [1.000000054672411, -0.08948418209496575, -1.2914855378640917],
+        ];
+
+        let lms_nonlinear = transform_color(oklab, M2_INV);
+        let lms_linear = [
+            lms_nonlinear[0] * lms_nonlinear[0] * lms_nonlinear[0],
+            lms_nonlinear[1] * lms_nonlinear[1] * lms_nonlinear[1],
+            lms_nonlinear[2] * lms_nonlinear[2] * lms_nonlinear[2],
+        ];
+        transform_color(lms_linear, M1_INV)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn from_xyz_d65_01() {
+            const TEST_VECS: &[([f64; 3], [f64; 3])] = &[
+                ([0.95, 1.0, 1.089], [1.0, 0.0, 0.0]),
+                ([1.0, 0.0, 0.0], [0.45, 1.236, -0.019]),
+                ([0.0, 1.0, 0.0], [0.922, -0.671, 0.263]),
+                ([0.0, 0.0, 1.0], [0.153, -1.415, -0.449]),
+            ];
+            for (v1, v2) in TEST_VECS.iter().copied() {
+                let r1 = from_xyz_d65(v1);
+                for i in 0..3 {
+                    assert!((r1[i] - v2[i]).abs() < 0.002);
+                }
+            }
+        }
+
+        #[test]
+        fn to_xyz_d65_01() {
+            const TEST_VECS: &[([f64; 3], [f64; 3])] = &[
+                ([0.95, 1.0, 1.089], [1.0, 0.0, 0.0]),
+                ([1.0, 0.0, 0.0], [0.45, 1.236, -0.019]),
+                ([0.0, 1.0, 0.0], [0.922, -0.671, 0.263]),
+                ([0.0, 0.0, 1.0], [0.153, -1.415, -0.449]),
+            ];
+            for (v1, v2) in TEST_VECS.iter().copied() {
+                let r2 = to_xyz_d65(v2);
+                for i in 0..3 {
+                    assert!((v1[i] - r2[i]).abs() < 0.002);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
