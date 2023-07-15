@@ -54,30 +54,38 @@ pub mod rgb_gamut {
     /// this should be the value with the same luminance as `rgb`.
     /// But client code can more-or-less compute this however they like.
     ///
-    /// `softness` smooths out the transition where colors blow out to
-    /// white due to clipping.  A value of 0.0 means no smoothing,
-    /// which has the advantage that already in-gamut colors are not
-    /// touched, but the disadvantage of a visible mach band as out-of-gamut
-    /// colors start to blow out.  Values greater than 0.0 smooth out
-    /// that transition, which eliminates the mach band and looks nicer,
-    /// but the greater the smoothing the more in-gamut colors have to be
-    /// touched to acheive that smoothing.  Reasonable values are generally
-    /// in the 0.05 to 0.2 range.
+    /// `softness` smooths out the transition where out-of-gamut colors
+    /// start to desaturate.  A value of 0.0 means no smoothing, which is
+    /// equivalent to a simple gamut intersection.  Values greater than
+    /// 0.0 smooth out the desaturation transition, which eliminates mach
+    /// bands there and generally looks better, but has to touch some
+    /// already in-gamut colors to do so (the more smoothing, the more
+    /// in-gamut colors are touched).  Reasonable values are generally in
+    /// the 0.05 to 0.2 range.
     pub fn closed_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
-        const EPSILON: f64 = 0.000_000_000_000_1;
+        const EPSILON: f64 = 1.0e-15;
 
-        let gray_level = gray_level.max(EPSILON).min(1.0);
-        let max_component = rgb[0].max(rgb[1]).max(rgb[2]);
-        if max_component <= EPSILON {
-            return [0.0; 3];
-        }
+        let gray_level = gray_level.max(0.0).min(1.0);
 
-        let t = soft_elbow(max_component, max_component / gray_level - 1.0, softness);
+        // (Soft-) clamp the rgb color, and compute a corresponding gray level.
+        let fac = {
+            let max_component = rgb[0].max(rgb[1]).max(rgb[2]);
+            if max_component <= EPSILON {
+                return [0.0; 3];
+            }
+            reinhard(max_component, softness) / max_component
+        };
+        let clamped_rgb = [rgb[0] * fac, rgb[1] * fac, rgb[2] * fac];
+        let clamped_rgb_gray_level = gray_level * fac;
 
+        // Mix enough white into the clamped rgb to reach the target gray level.
+        let t = ((gray_level - clamped_rgb_gray_level) / (1.0 - clamped_rgb_gray_level))
+            .max(0.0)
+            .min(1.0);
         [
-            gray_level + ((rgb[0] - gray_level) * (t / max_component)),
-            gray_level + ((rgb[1] - gray_level) * (t / max_component)),
-            gray_level + ((rgb[2] - gray_level) * (t / max_component)),
+            (clamped_rgb[0] * (1.0 - t)) + t,
+            (clamped_rgb[1] * (1.0 - t)) + t,
+            (clamped_rgb[2] * (1.0 - t)) + t,
         ]
     }
 
@@ -169,64 +177,42 @@ pub mod rgb_gamut {
 
     //---------------------------------------------------------
 
-    /// Basically an up-side-down soft absolute value function, but
-    /// parameterized in a specific way.
+    /// Generalized Reinhard curve.
     ///
-    /// https://www.desmos.com/calculator/09mlv5lmfq
-    ///
-    /// Conceptually, this creates a triangle function where `y = 0` at
-    /// `x = 0` and at `x = 1 + s`, and where `y = 1` at `x = 1`.
-    /// Like this:
-    ///
-    /// ```text
-    ///    /-_
-    ///   / | -_
-    ///  /  |   -_
-    /// /   |     -_
-    /// 0   1      1+s
-    /// ```
-    ///
-    /// However, the sharp angle at `x = 1` can be softened with the
-    /// parameter `softness`.  When `softness = 0` it's perfectly sharp,
-    /// like a piecewise linear function.  But for `softness > 0` it gets
-    /// progressively softer, connecting the two line segments with a broader
-    /// and broader continuous curve.
-    ///
-    /// Importantly, as `softness` increases, the outputs (y) of the function
-    /// only *decrease* in value to create the smooth transition, and the
-    /// slopes of the lines stay roughly constant.
-    ///
-    /// Reasonable values of `w` are generally in the 0.05 to 0.2 range.
-    fn soft_elbow(x: f64, s: f64, softness: f64) -> f64 {
-        let s = s.max(0.0);
-
-        if x < 0.0 {
-            0.0
-        } else if x > (1.0 + s) {
-            // Note: important that this is `>` and not `>=`.
-            0.0
-        } else if softness <= 0.0 {
-            // Fast path when things are perfectly sharp.
-            if x <= 1.0 {
-                x
-            } else {
-                (1.0 + s - x) / s
-            }
-        } else {
-            // Remap softness to give more consistent, controllable results.
-            let w = softness * (softness * softness + s).sqrt();
-
-            // Compute mapping values.
-            let w2 = w * w;
-            let s2 = s * s;
-            let a = (1.0 + w2).sqrt();
-            let b = (s2 + w2).sqrt();
-            let c = (b - a) / (s + 1.0);
-
-            // Actual formula.
-            let x1 = x - 1.0;
-            (-(x1 * x1 + w2).sqrt() + (x * c) + a) / (a + c)
+    /// `p`: a tweaking parameter that affects the shape of the curve,
+    ///      in (0.0, inf].  Larger values make it gentler, lower values
+    ///      make it sharper.  1.0 = standard Reinhard, 0.0 = linear
+    ///      in [0,1].
+    #[inline(always)]
+    fn reinhard(x: f64, p: f64) -> f64 {
+        // Make out-of-range numbers do something reasonable and predictable.
+        if x <= 0.0 {
+            return x;
         }
+
+        // Special case so we get linear at `p == 0` instead of undefined.
+        // Negative `p` is unsupported, so clamp.
+        if p <= 0.0 {
+            if x >= 1.0 {
+                return 1.0;
+            } else {
+                return x;
+            }
+        }
+
+        let tmp = x.powf(-1.0 / p);
+
+        // Special cases for numerical stability.
+        // Note that for the supported values of `p`, `tmp > 1.0` implies
+        // `x < 1.0` and vice versa.
+        if tmp > 1.0e15 {
+            return x;
+        } else if tmp < 1.0e-15 {
+            return 1.0;
+        }
+
+        // Actual generalized Reinhard.
+        (tmp + 1.0).powf(-p)
     }
 }
 
