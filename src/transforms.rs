@@ -15,44 +15,55 @@ pub fn xyy_to_xyz(xyy: [f64; 3]) -> [f64; 3] {
 
 /// Operations for working with RGB colors relative to their enclosing gamut.
 pub mod rgb_gamut {
-    /// Clip an RGB value to an open-domain color gamut.
+    /// Clip an RGB value to an open-domain `[0.0, inf]` color gamut.
     ///
-    /// This ensures that all RGB channels are >= 0.0.
+    /// In other words, ensures that all RGB channels are >= 0.0.
     ///
-    /// `gray_level` is the achromatic value (i.e. `[gray_level; 3]`)
-    /// that we're clipping towards.  For luminance-preserving clipping,
-    /// this should be the value with the same luminance as `rgb`.
-    /// But client code can more-or-less compute this however they like.
-    pub fn open_domain_clip(rgb: [f64; 3], gray_level: f64) -> [f64; 3] {
-        let gray_level = gray_level.max(0.0);
-        let min_component = rgb[0].min(rgb[1]).min(rgb[2]);
-
-        if min_component >= 0.0 {
-            rgb
-        } else {
-            // Amount to lerp from `gray_level` -> `rgb` to put `min_component` exactly at zero.
-            let t = gray_level / (gray_level - min_component);
-
-            // Do the lerp.
-            [
-                (gray_level * (1.0 - t)) + (rgb[0] * t),
-                (gray_level * (1.0 - t)) + (rgb[1] * t),
-                (gray_level * (1.0 - t)) + (rgb[2] * t),
-            ]
+    /// `gray_level` is the achromatic value that we're clipping towards.
+    /// For luminance-preserving clipping, this should be the value with
+    /// the same luminance as `rgb`.  But client code can more-or-less
+    /// compute this however they like for different behaviors.
+    ///
+    /// `softness` is how much to smooth out the transition at the gamut
+    /// boundary, making it act as a gamut compressor rather than just a
+    /// gamut clipper.  0.0 is a hard clip, and larger values smooth it
+    /// out.
+    pub fn open_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
+        if gray_level <= 0.0 {
+            return [0.0; 3];
         }
+
+        // Amount to lerp from `gray_level` -> `rgb` to clip/compress to the gamut boundary.
+        let t = {
+            let min_component = rgb[0].min(rgb[1]).min(rgb[2]);
+            let saturation = (gray_level - min_component) / gray_level;
+            if saturation <= 0.0 {
+                return rgb;
+            }
+            let target_saturation = soft_clamp(saturation, softness);
+
+            target_saturation / saturation
+        };
+
+        // Do the lerp.
+        [
+            (gray_level * (1.0 - t)) + (rgb[0] * t),
+            (gray_level * (1.0 - t)) + (rgb[1] * t),
+            (gray_level * (1.0 - t)) + (rgb[2] * t),
+        ]
     }
 
     /// Clip an RGB value to a closed-domain `[0.0, 1.0]` color gamut.
     ///
     /// Note: this does *not* do open-domain clipping, and assumes that
     /// `rgb` is already within the open-domain gamut (i.e. all channels
-    /// are >= 0.0).  If you *also* need open-domain clipping, do that
-    /// before passing `rgb` to this function.
+    /// are >= 0.0).  If you also need open-domain clipping, do that
+    /// *before* passing `rgb` to this function.
     ///
-    /// `gray_level` is the achromatic value (i.e. `[gray_level; 3]`)
-    /// that we're clipping towards.  For luminance-preserving clipping,
-    /// this should be the value with the same luminance as `rgb`.
-    /// But client code can more-or-less compute this however they like.
+    /// `gray_level` is the achromatic value that we're clipping towards.
+    /// For luminance-preserving clipping, this should be the value with
+    /// the same luminance as `rgb`.  But client code can more-or-less
+    /// compute this however they like for different behaviors.
     ///
     /// `softness` smooths out the transition where out-of-gamut colors
     /// start to desaturate.  A value of 0.0 means no smoothing, which is
@@ -60,20 +71,19 @@ pub mod rgb_gamut {
     /// 0.0 smooth out the desaturation transition, which eliminates mach
     /// bands there and generally looks better, but has to touch some
     /// already in-gamut colors to do so (the more smoothing, the more
-    /// in-gamut colors are touched).  Reasonable values are generally in
-    /// the 0.05 to 0.2 range.
+    /// in-gamut colors are touched).
     pub fn closed_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
         const EPSILON: f64 = 1.0e-15;
 
-        let gray_level = gray_level.max(0.0).min(1.0);
+        let gray_level = gray_level.clamp(0.0, 1.0);
 
-        // (Soft-) clamp the rgb color, and compute a corresponding gray level.
+        // Soft clamp the rgb color, and compute a corresponding gray level.
         let fac = {
             let max_component = rgb[0].max(rgb[1]).max(rgb[2]);
             if max_component <= EPSILON {
                 return [0.0; 3];
             }
-            reinhard(max_component, softness) / max_component
+            soft_clamp(max_component, softness) / max_component
         };
         let clamped_rgb = [rgb[0] * fac, rgb[1] * fac, rgb[2] * fac];
         let clamped_rgb_gray_level = gray_level * fac;
@@ -177,42 +187,38 @@ pub mod rgb_gamut {
 
     //---------------------------------------------------------
 
-    /// Generalized Reinhard curve.
+    /// Clamps `x` to <= 1.0 with a (optionally) smooth transition.
     ///
-    /// `p`: a tweaking parameter that affects the shape of the curve,
-    ///      in (0.0, inf].  Larger values make it gentler, lower values
-    ///      make it sharper.  1.0 = standard Reinhard, 0.0 = linear
-    ///      in [0,1].
+    /// This is implemented as a generalization of the classic Reinhard
+    /// curve that is equivalent to `x.min(1.0)` at `softness == 0` and to
+    /// to Reinhard at `softness == 1.0`.
+    ///
+    /// - `softness`: 0.0 means completely sharp, and larger values
+    ///   increase the softness of the transition.
+    ///
+    /// https://www.desmos.com/calculator/i584qbqrc5
     #[inline(always)]
-    fn reinhard(x: f64, p: f64) -> f64 {
-        // Make out-of-range numbers do something reasonable and predictable.
-        if x <= 0.0 {
-            return x;
-        }
+    fn soft_clamp(x: f64, softness: f64) -> f64 {
+        let p = softness; // For brevity.
 
-        // Special case so we get linear at `p == 0` instead of undefined.
-        // Negative `p` is unsupported, so clamp.
-        if p <= 0.0 {
-            if x >= 1.0 {
-                return 1.0;
+        if p <= 0.0 || x <= 0.0 {
+            // `p == 0.0` approaches this, but results in a divide-by-zero
+            // when it actually hits it.  So we special-case it.
+            // We also do this for `p` or `x` less than zero, because the
+            // main equation behaves in unwanted ways in those ranges.
+            x.min(1.0)
+        } else {
+            // The main equation, with some special cases for numerical
+            // stability.
+            let tmp = x.powf(-1.0 / p);
+            if tmp > 1.0e15 {
+                x
+            } else if tmp < 1.0e-15 {
+                1.0
             } else {
-                return x;
+                (tmp + 1.0).powf(-p)
             }
         }
-
-        let tmp = x.powf(-1.0 / p);
-
-        // Special cases for numerical stability.
-        // Note that for the supported values of `p`, `tmp > 1.0` implies
-        // `x < 1.0` and vice versa.
-        if tmp > 1.0e15 {
-            return x;
-        } else if tmp < 1.0e-15 {
-            return 1.0;
-        }
-
-        // Actual generalized Reinhard.
-        (tmp + 1.0).powf(-p)
     }
 }
 
