@@ -75,9 +75,7 @@ pub mod rgb_gamut {
     pub fn closed_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
         const EPSILON: f64 = 1.0e-15;
 
-        let gray_level = gray_level.clamp(0.0, 1.0);
-
-        // Soft clamp the rgb color, and compute a corresponding gray level.
+        // Scale the rgb color to be in-gamut, and compute a corresponding gray level.
         let fac = {
             let max_component = rgb[0].max(rgb[1]).max(rgb[2]);
             if max_component <= EPSILON {
@@ -85,18 +83,22 @@ pub mod rgb_gamut {
             }
             soft_clamp(max_component, softness) / max_component
         };
-        let clamped_rgb = [rgb[0] * fac, rgb[1] * fac, rgb[2] * fac];
-        let clamped_rgb_gray_level = gray_level * fac;
+        let scaled_rgb = [rgb[0] * fac, rgb[1] * fac, rgb[2] * fac];
+        let scaled_gray_level = gray_level * fac;
 
-        // Mix enough white into the clamped rgb to reach the target gray level.
-        let t = ((gray_level - clamped_rgb_gray_level) / (1.0 - clamped_rgb_gray_level))
-            .max(0.0)
-            .min(1.0);
-        [
-            (clamped_rgb[0] * (1.0 - t)) + t,
-            (clamped_rgb[1] * (1.0 - t)) + t,
-            (clamped_rgb[2] * (1.0 - t)) + t,
-        ]
+        // Mix enough white into the scaled rgb to reach the target gray level.
+        let clamped_gray_level = gray_level.clamp(0.0, 1.0);
+        if scaled_gray_level >= clamped_gray_level {
+            scaled_rgb
+        } else {
+            let t = ((clamped_gray_level - scaled_gray_level) / (1.0 - scaled_gray_level))
+                .clamp(0.0, 1.0);
+            [
+                (scaled_rgb[0] * (1.0 - t)) + t,
+                (scaled_rgb[1] * (1.0 - t)) + t,
+                (scaled_rgb[2] * (1.0 - t)) + t,
+            ]
+        }
     }
 
     /// Intersects the directed line segment `from` -> `to` with the rgb gamut.
