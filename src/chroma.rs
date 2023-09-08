@@ -81,11 +81,19 @@ pub const ADOBE_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
     w: (0.3457, 0.3585),
 };
 
-/// Arri's ALEXA Wide Gamut RGB.
-pub const ALEXA_WIDE_GAMUT_RGB: Chromaticities = Chromaticities {
+/// ARRI Wide Gamut 3 (a.k.a. ALEXA Wide Gamut RGB).
+pub const ARRI_WIDE_GAMUT_3: Chromaticities = Chromaticities {
     r: (0.6840, 0.3130),
     g: (0.2210, 0.8480),
     b: (0.0861, -0.1020),
+    w: (0.3127, 0.3290),
+};
+
+/// ARRI Wide Gamut 4.
+pub const ARRI_WIDE_GAMUT_4: Chromaticities = Chromaticities {
+    r: (0.7347, 0.2653),
+    g: (0.1424, 0.8576),
+    b: (0.0991, -0.0308),
     w: (0.3127, 0.3290),
 };
 
