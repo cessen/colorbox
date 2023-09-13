@@ -113,6 +113,14 @@ pub const DJI_D_GAMUT: Chromaticities = Chromaticities {
     w: (0.3127, 0.3290),
 };
 
+/// FilmLight's E-Gamut.
+pub const E_GAMUT: Chromaticities = Chromaticities {
+    r: (0.8000, 0.3177),
+    g: (0.1800, 0.9000),
+    b: (0.0650, -0.0805),
+    w: (0.3127, 0.3290),
+};
+
 /// Panasonic V-Gamut chromaticities.
 pub const PANASONIC_V_GAMUT: Chromaticities = Chromaticities {
     r: (0.7300, 0.2800),
