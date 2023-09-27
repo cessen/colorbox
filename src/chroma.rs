@@ -41,6 +41,17 @@ pub const DCI_P3: Chromaticities = Chromaticities {
     w: (0.314, 0.351),
 };
 
+/// Display P3 chromaticities.
+///
+/// Defined by Apple.  The R, G, and B primaries are the same as DCI-P3,
+/// but the white point is D65.
+pub const DISPLAY_P3: Chromaticities = Chromaticities {
+    r: (0.680, 0.320),
+    g: (0.265, 0.690),
+    b: (0.150, 0.060),
+    w: (0.3127, 0.3290),
+};
+
 /// ACES AP0 chromaticities.
 ///
 /// These are the chromaticities of the ACES2065-1 color space.
