@@ -104,11 +104,12 @@ pub fn write<W: Write>(
 ///
 /// Either a 1D LUT, a 3D LUT, or both can be returned.
 pub fn read<R: BufRead>(reader: R) -> Result<(Option<Lut1D>, Option<Lut3D>), super::ReadError> {
-    let mut range_1d = (0.0f32, 0.0f32);
+    // let mut name: Option<String> = None;
+    let mut range_1d = (0.0f32, 1.0f32);
     let mut length_1d = 0;
     let mut tables_1d = [Vec::new(), Vec::new(), Vec::new()];
 
-    let mut range_3d = (0.0f32, 0.0f32);
+    let mut range_3d = (0.0f32, 1.0f32);
     let mut size_3d = 0;
     let mut tables_3d = [Vec::new(), Vec::new(), Vec::new()];
 
@@ -124,12 +125,18 @@ pub fn read<R: BufRead>(reader: R) -> Result<(Option<Lut1D>, Option<Lut3D>), sup
 
         if parts.is_empty() || parts[0].starts_with("#") {
             // Skip blank lines and comments.
+        } else if parts[0] == "TITLE" && parts.len() > 1 {
+            let name_parts: Vec<_> = line.trim().split("\"").collect();
+            if name_parts.len() != 3 || !name_parts[2].is_empty() {
+                return Err(super::ReadError::FormatErr);
+            }
+            // name = Some(name_parts[1].into());
         } else if parts[0] == "LUT_1D_SIZE" && parts.len() == 2 {
             length_1d = parts[1].parse::<usize>()?;
         } else if parts[0] == "LUT_1D_INPUT_RANGE" && parts.len() == 3 {
             range_1d.0 = parts[1].parse::<f32>()?;
             range_1d.1 = parts[2].parse::<f32>()?;
-        } else if parts[0] == "LUT_SIZE_3d" && parts.len() == 2 {
+        } else if parts[0] == "LUT_3D_SIZE" && parts.len() == 2 {
             size_3d = parts[1].parse::<usize>()?;
         } else if parts[0] == "LUT_3D_INPUT_RANGE" && parts.len() == 3 {
             range_3d.0 = parts[1].parse::<f32>()?;
@@ -143,10 +150,7 @@ pub fn read<R: BufRead>(reader: R) -> Result<(Option<Lut1D>, Option<Lut3D>), sup
     }
 
     // Check for invalid header.
-    if (length_1d == 0 && size_3d == 0)
-        || (length_1d > 0 && range_1d == (0.0, 0.0))
-        || (size_3d > 0 && range_3d == (0.0, 0.0))
-    {
+    if length_1d == 0 && size_3d == 0 {
         return Err(super::ReadError::FormatErr);
     }
 
