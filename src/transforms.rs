@@ -228,7 +228,8 @@ pub mod rgb_gamut {
 ///
 /// The transforms in this module reproduce some of the fixed-function
 /// transforms built in to Open Color IO.  They are implemented to
-/// exactly reproduce the behavior of the OCIO functions.
+/// exactly reproduce the behavior of the OCIO functions, including all
+/// quirks.
 pub mod ocio {
     /// RGB -> HSV conversion.
     ///
@@ -315,6 +316,85 @@ pub mod ocio {
             grn * delta + rgb_min,
             blu * delta + rgb_min,
         ]
+    }
+
+    /// CIE XYZ -> uvY conversion.
+    ///
+    /// uvY is the linear Y component from XYZ, and the u' and v' (not u
+    /// and v) chromaticity coordinates from CIELUV.
+    pub fn xyz_to_uvy(xyz: [f64; 3]) -> [f64; 3] {
+        let x = xyz[0];
+        let y = xyz[1];
+        let z = xyz[2];
+
+        let d = {
+            let tmp = x + 15.0 * y + 3.0 * z;
+            if tmp == 0.0 {
+                0.0
+            } else {
+                1.0 / tmp
+            }
+        };
+
+        let u = 4.0 * x * d;
+        let v = 9.0 * y * d;
+
+        [u, v, y]
+    }
+
+    /// uvY -> CIE XYZ conversion.
+    ///
+    /// uvY is the linear Y component from XYZ, and the u' and v' (not u
+    /// and v) chromaticity coordinates from CIELUV.
+    pub fn uvy_to_xyz(uvy: [f64; 3]) -> [f64; 3] {
+        let u = uvy[0];
+        let v = uvy[1];
+        let y = uvy[2];
+
+        let d = if v == 0.0 { 0.0 } else { 1.0 / v };
+        let x = (9.0 / 4.0) * y * u * d;
+        let z = (3.0 / 4.0) * y * (4.0 - u - (20.0 / 3.0) * v) * d;
+
+        [x, y, z]
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn rgb_hsv_round_trip() {
+            for r in -20..21 {
+                for g in -20..21 {
+                    for b in -20..21 {
+                        let rgb = [r as f64 / 1.0, g as f64 / 1.0, b as f64 / 1.0];
+                        let hsv = rgb_to_hsv(rgb);
+                        let rgb2 = hsv_to_rgb(hsv);
+                        if hsv[2] == 0.0 {
+                            continue;
+                        }
+                        assert!((rgb[0] - rgb2[0]).abs() < 1.0e-6);
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn xyz_uvy_round_trip() {
+            for x in -20..21 {
+                for y in -20..21 {
+                    for z in -20..21 {
+                        let xyz = [x as f64 / 1.0, y as f64 / 1.0, z as f64 / 1.0];
+                        let uvy = xyz_to_uvy(xyz);
+                        let xyz2 = uvy_to_xyz(uvy);
+                        if uvy[1] == 0.0 {
+                            continue;
+                        }
+                        assert!((xyz[0] - xyz2[0]).abs() < 1.0e-6);
+                    }
+                }
+            }
+        }
     }
 }
 
