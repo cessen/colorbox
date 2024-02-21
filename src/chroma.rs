@@ -1,7 +1,74 @@
 //! Chromaticity coordinates.
 
-pub const WHITEPOINT_E: (f64, f64) = (1.0 / 3.0, 1.0 / 3.0);
-pub const WHITEPOINT_D65: (f64, f64) = (0.31271, 0.32902);
+pub mod illuminant {
+    //! CIE 1931 xy chromaticity coordinates of various standard illuminants.
+
+    /// CIE standard illuminant A.
+    pub const A: (f64, f64) = (0.44757, 0.40745);
+
+    /// CIE standard illuminant B.
+    pub const B: (f64, f64) = (0.34842, 0.35161);
+
+    /// CIE standard illuminant C.
+    pub const C: (f64, f64) = (0.31006, 0.31616);
+
+    /// CIE standard illuminant D50.
+    pub const D50: (f64, f64) = (0.34567, 0.35850);
+
+    /// CIE standard illuminant D55.
+    pub const D55: (f64, f64) = (0.33242, 0.34743);
+
+    /// CIE standard illuminant D65.
+    pub const D65: (f64, f64) = (0.31271, 0.32902);
+
+    /// CIE standard illuminant D75.
+    pub const D75: (f64, f64) = (0.29902, 0.31485);
+
+    /// CIE standard illuminant D93.
+    pub const D93: (f64, f64) = (0.28315, 0.29711);
+
+    /// Equal-energy illuminant.
+    ///
+    /// Illuminant with equal energy at every wavelength (a constant spectral
+    /// power distribution).  A.k.a. CIE standard illuminant E.
+    pub const E: (f64, f64) = (1.0 / 3.0, 1.0 / 3.0);
+
+    /// CIE standard illuminant F1.
+    pub const F1: (f64, f64) = (0.31310, 0.33727);
+
+    /// CIE standard illuminant F2.
+    pub const F2: (f64, f64) = (0.37208, 0.37529);
+
+    /// CIE standard illuminant F3.
+    pub const F3: (f64, f64) = (0.40910, 0.39430);
+
+    /// CIE standard illuminant F4.
+    pub const F4: (f64, f64) = (0.44018, 0.40329);
+
+    /// CIE standard illuminant F5.
+    pub const F5: (f64, f64) = (0.31379, 0.34531);
+
+    /// CIE standard illuminant F6.
+    pub const F6: (f64, f64) = (0.37790, 0.38835);
+
+    /// CIE standard illuminant F7.
+    pub const F7: (f64, f64) = (0.31292, 0.32933);
+
+    /// CIE standard illuminant F8.
+    pub const F8: (f64, f64) = (0.34588, 0.35875);
+
+    /// CIE standard illuminant F9.
+    pub const F9: (f64, f64) = (0.37417, 0.37281);
+
+    /// CIE standard illuminant F10.
+    pub const F10: (f64, f64) = (0.34609, 0.35986);
+
+    /// CIE standard illuminant F11.
+    pub const F11: (f64, f64) = (0.38052, 0.37713);
+
+    /// CIE standard illuminant F12.
+    pub const F12: (f64, f64) = (0.43695, 0.40441);
+}
 
 /// The chromaticities of a (usually) RGB color space.
 ///
@@ -16,6 +83,22 @@ pub struct Chromaticities {
     pub b: (f64, f64),
     pub w: (f64, f64),
 }
+
+/// Convenience chromaticities for XYZ color.  Not an RGB color space.
+///
+/// The purpose of these chromaticities is to be able to represent the XYZ color
+/// space in places that normally expect an RGB color space.  For example, this
+/// can be used in an RGB->RGB color transform function to convert between XYZ
+/// and an RGB color space.
+///
+/// The use cases for this are niche, and you probably don't need/want to use
+/// it.  But when it comes up, it's handy to have.
+pub const XYZ: Chromaticities = Chromaticities {
+    r: (1.0, 0.0),
+    g: (0.0, 1.0),
+    b: (0.0, 0.0),
+    w: illuminant::E,
+};
 
 /// Rec.709/sRGB chromaticities.
 pub const REC709: Chromaticities = Chromaticities {
@@ -268,4 +351,29 @@ pub mod sony {
         b: (0.0890, -0.0870),
         w: (0.3127, 0.3290),
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        matrix::{rgb_to_rgb_matrix, rgb_to_xyz_matrix, xyz_to_rgb_matrix},
+        matrix_max_diff,
+    };
+
+    #[test]
+    fn xyz_chroma() {
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+        assert!(matrix_max_diff(rgb_to_xyz_matrix(XYZ), identity) < 0.000_000_001);
+        assert!(matrix_max_diff(xyz_to_rgb_matrix(XYZ), identity) < 0.000_000_001);
+        assert!(
+            matrix_max_diff(rgb_to_rgb_matrix(REC709, XYZ), rgb_to_xyz_matrix(REC709))
+                < 0.000_000_001
+        );
+        assert!(
+            matrix_max_diff(rgb_to_rgb_matrix(XYZ, REC709), xyz_to_rgb_matrix(REC709))
+                < 0.000_000_001
+        );
+    }
 }
