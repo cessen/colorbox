@@ -30,7 +30,6 @@ submitted for inclusion in ColorBox by you will be licensed as above,
 without any additional terms or conditions.
 
 
-
 [crates-io-badge]: https://img.shields.io/crates/v/colorbox.svg
 [crates-io-url]: https://crates.io/crates/colorbox
 [docs-rs-img]: https://docs.rs/colorbox/badge.svg

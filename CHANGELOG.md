@@ -4,6 +4,23 @@
 ## [Unreleased]
 
 
+## [0.4.0] - 2024-02-21
+
+### Additions
+
+- Misc convenience functions for building and working with LUTs.
+- A bunch more chromaticities and transfer functions, including those from ARRI.
+- A new "transforms" module with various useful color transforms.
+
+### Improvements
+
+- The Resolve .cube reader is now more lenient in what it accepts.
+
+### Other Changes
+
+- `matrix_compose` is now a function instead of a macro, and simply takes a slice of matrices.
+
+
 ## [0.3.0] - 2022-05-26
 
 ### Additions
@@ -39,7 +56,8 @@
 - A collection of common transfer functions.
 
 
-[Unreleased]: https://github.com/cessen/colorbox/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/cessen/colorbox/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/cessen/colorbox/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cessen/colorbox/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cessen/colorbox/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cessen/colorbox/releases/tag/v0.1.0
