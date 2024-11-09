@@ -24,11 +24,11 @@ pub mod rgb_gamut {
     /// the same luminance as `rgb`.  But client code can more-or-less
     /// compute this however they like for different behaviors.
     ///
-    /// `softness` is how much to smooth out the transition at the gamut
-    /// boundary, making it act as a gamut compressor rather than just a
-    /// gamut clipper.  0.0 is a hard clip, and larger values smooth it
-    /// out.
-    pub fn open_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
+    /// `protected` is how much of the gamut is protected from modification.
+    /// 0.0 means it's all up for grabs, 1.0 means that the entire gamut is
+    /// protected and only out-of-gamut colors are touched.  Lower values make
+    /// the mapping softer, larger values sharper.  1.0 is a hard clip.
+    pub fn open_domain_clip(rgb: [f64; 3], gray_level: f64, protected: f64) -> [f64; 3] {
         if gray_level <= 0.0 {
             return [0.0; 3];
         }
@@ -40,7 +40,7 @@ pub mod rgb_gamut {
             if saturation <= 0.0 {
                 return rgb;
             }
-            let target_saturation = soft_clamp(saturation, softness);
+            let target_saturation = soft_clamp(saturation, protected);
 
             target_saturation / saturation
         };
@@ -65,14 +65,14 @@ pub mod rgb_gamut {
     /// the same luminance as `rgb`.  But client code can more-or-less
     /// compute this however they like for different behaviors.
     ///
-    /// `softness` smooths out the transition where out-of-gamut colors
-    /// start to desaturate.  A value of 0.0 means no smoothing, which is
-    /// equivalent to a simple gamut intersection.  Values greater than
-    /// 0.0 smooth out the desaturation transition, which eliminates mach
-    /// bands there and generally looks better, but has to touch some
-    /// already in-gamut colors to do so (the more smoothing, the more
-    /// in-gamut colors are touched).
-    pub fn closed_domain_clip(rgb: [f64; 3], gray_level: f64, softness: f64) -> [f64; 3] {
+    /// `protected` is the channel value up to which all channels are protected
+    /// from modification.  1.0 means that the entire closed gamut is protected,
+    /// and only values greater than 1.0 are touched, resulting in a hard
+    /// clip. Values less than 1.0 give room to smooth out the desaturation
+    /// transition, which eliminates mach bands there and generally looks
+    /// better, but has to touch some already in-gamut colors to do so (the more
+    /// smoothing, the more in-gamut colors are touched).
+    pub fn closed_domain_clip(rgb: [f64; 3], gray_level: f64, protected: f64) -> [f64; 3] {
         const EPSILON: f64 = 1.0e-15;
 
         // Scale the rgb color to be in-gamut, and compute a corresponding gray level.
@@ -81,7 +81,7 @@ pub mod rgb_gamut {
             if max_component <= EPSILON {
                 return [0.0; 3];
             }
-            soft_clamp(max_component, softness) / max_component
+            soft_clamp(max_component, protected) / max_component
         };
         let scaled_rgb = [rgb[0] * fac, rgb[1] * fac, rgb[2] * fac];
         let scaled_gray_level = gray_level * fac;
@@ -191,35 +191,30 @@ pub mod rgb_gamut {
 
     /// Clamps `x` to <= 1.0 with a (optionally) smooth transition.
     ///
-    /// This is implemented as a generalization of the classic Reinhard
-    /// curve that is equivalent to `x.min(1.0)` at `softness == 0` and to
-    /// to Reinhard at `softness == 1.0`.
+    /// - `protected`: the value up to which x is not touched.  1.0 is a
+    ///    perfectly sharp clip, and lower numbers give room for
+    ///    progressively smoother roll-offs.
     ///
-    /// - `softness`: 0.0 means completely sharp, and larger values
-    ///   increase the softness of the transition.
-    ///
-    /// https://www.desmos.com/calculator/i584qbqrc5
+    /// https://www.desmos.com/calculator/8nnrcmmxm1
     #[inline(always)]
-    fn soft_clamp(x: f64, softness: f64) -> f64 {
-        let p = softness; // For brevity.
+    fn soft_clamp(x: f64, protected: f64) -> f64 {
+        let p = protected; // For brevity.
 
-        if p <= 0.0 || x <= 0.0 {
-            // `p == 0.0` approaches this, but results in a divide-by-zero
+        if p >= 1.0 || x <= p {
+            // `p == 1.0` approaches this, but results in a divide-by-zero
             // when it actually hits it.  So we special-case it.
             // We also do this for `p` or `x` less than zero, because the
             // main equation behaves in unwanted ways in those ranges.
             x.min(1.0)
         } else {
-            // The main equation, with some special cases for numerical
-            // stability.
-            let tmp = x.powf(-1.0 / p);
-            if tmp > 1.0e15 {
-                x
-            } else if tmp < 1.0e-15 {
-                1.0
-            } else {
-                (tmp + 1.0).powf(-p)
-            }
+            // Remap.
+            let x = (x - p) / (1.0 - p);
+
+            // The main equation.
+            let tmp = x / (x * x + 1.0).sqrt();
+
+            // Remap.
+            tmp * (1.0 - p) + p
         }
     }
 }
