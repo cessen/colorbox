@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+- Different parameterization for gamut clipping softness, that gives hard guarantees on how much of the gamut is left untouched.
+- Added chromaticity coordinates for more standard illuminants.
+- Renamed the matrix function `invert()` to `inverse()`.
+
 
 ## [0.4.0] - 2024-02-21
 
