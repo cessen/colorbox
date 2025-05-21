@@ -69,7 +69,7 @@ pub fn rgb_to_xyz_matrix(chroma: Chromaticities) -> Matrix {
 
 /// Inverse of `rgb_to_xyz_matrix()`.
 pub fn xyz_to_rgb_matrix(chroma: Chromaticities) -> Matrix {
-    invert(rgb_to_xyz_matrix(chroma)).unwrap()
+    inverse(rgb_to_xyz_matrix(chroma)).unwrap()
 }
 
 /// Computes a matrix to transform colors from one RGB color space to
@@ -146,7 +146,7 @@ pub fn xyz_chromatic_adaptation_matrix(
         AdaptationMethod::Hunt => TO_LMS_HUNT,
         AdaptationMethod::Bradford => TO_RGB_BRADFORD,
     };
-    let from_abc = invert(to_abc).unwrap();
+    let from_abc = inverse(to_abc).unwrap();
 
     // Compute the white points' XYZ values.
     let src_w_xyz = [src_w.0 / src_w.1, 1.0, (1.0 - src_w.0 - src_w.1) / src_w.1];
@@ -164,7 +164,7 @@ pub fn xyz_chromatic_adaptation_matrix(
     ];
 
     // Combine the matrices.
-    multiply(multiply(to_abc, w_scale), from_abc)
+    compose(&[to_abc, w_scale, from_abc])
 }
 
 /// Creates a matrix that simply scales each component of a color by the
@@ -180,82 +180,41 @@ pub fn scale_matrix(scale: [f64; 3]) -> Matrix {
 /// Calculates the inverse of a matrix.
 ///
 /// Returns `None` is the matrix is not invertible.
-pub fn invert(m: Matrix) -> Option<Matrix> {
-    let mut s = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
-    let mut t = m;
+pub fn inverse(m: Matrix) -> Option<Matrix> {
+    // Misc computations that are used more than once below.
+    // Just for optimization, no meaning behind these.
+    let a = (m[1][1] * m[2][2]) - (m[2][1] * m[1][2]);
+    let b = m[1][0] * m[2][2];
+    let c = m[1][2] * m[2][0];
+    let d = m[1][0] * m[2][1];
 
-    // Forward elimination
-    for i in 0..2 {
-        let mut pivot = i;
-        let mut pivotsize = t[i][i];
+    // Determinant.
+    let det = m[0][0] * a - m[0][1] * (b - c) + m[0][2] * (d - m[1][1] * m[2][0]);
 
-        if pivotsize < 0.0 {
-            pivotsize = -pivotsize;
-        }
-
-        for j in (i + 1)..3 {
-            let mut tmp = t[j][i];
-
-            if tmp < 0.0 {
-                tmp = -tmp;
-            }
-
-            if tmp > pivotsize {
-                pivot = j;
-                pivotsize = tmp;
-            }
-        }
-
-        if pivotsize == 0.0 {
-            return None;
-        }
-
-        if pivot != i {
-            for j in 0..3 {
-                let mut tmp = t[i][j];
-                t[i][j] = t[pivot][j];
-                t[pivot][j] = tmp;
-
-                tmp = s[i][j];
-                s[i][j] = s[pivot][j];
-                s[pivot][j] = tmp;
-            }
-        }
-
-        for j in (i + 1)..3 {
-            let f = t[j][i] / t[i][i];
-
-            for k in 0..3 {
-                t[j][k] -= f * t[i][k];
-                s[j][k] -= f * s[i][k];
-            }
-        }
+    if det == 0.0 {
+        // No inverse.
+        return None;
     }
 
-    // Backward substitution
-    for i in (0..3).rev() {
-        let f = t[i][i];
+    let invdet = 1.0 / det;
 
-        if t[i][i] == 0.0 {
-            return None;
-        }
-
-        for j in 0..3 {
-            t[i][j] /= f;
-            s[i][j] /= f;
-        }
-
-        for j in 0..i {
-            let f = t[j][i];
-
-            for k in 0..3 {
-                t[j][k] -= f * t[i][k];
-                s[j][k] -= f * s[i][k];
-            }
-        }
-    }
-
-    Some(s)
+    Some([
+        [
+            a * invdet,
+            (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * invdet,
+            (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * invdet,
+        ],
+        [
+            (c - b) * invdet,
+            (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invdet,
+            (m[1][0] * m[0][2] - m[0][0] * m[1][2]) * invdet,
+        ],
+        [
+            (d - m[2][0] * m[1][1]) * invdet,
+            (m[2][0] * m[0][1] - m[0][0] * m[2][1]) * invdet,
+            (m[0][0] * m[1][1] - m[1][0] * m[0][1]) * invdet,
+        ],
+    ])
 }
 
 /// Multiplies two matrices together.
@@ -533,9 +492,9 @@ mod tests {
     }
 
     #[test]
-    fn matrix_invert_test() {
+    fn matrix_inverse_test() {
         let mat = rgb_to_xyz_matrix(crate::chroma::ACES_AP0);
-        let inv = invert(mat).unwrap();
+        let inv = inverse(mat).unwrap();
 
         assert!(
             matrix_max_diff(
